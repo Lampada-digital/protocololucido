@@ -90,10 +90,10 @@ const ps1FragmentShader = `
     
     vec4 texColor = texture2D(u_texture, uv);
     
-    // Lighting calculation
+    // Lighting calculation - balanced for horror readability
     vec3 lightDir = normalize(vec3(0.3, 1.0, 0.5));
     float diffuse = max(dot(vNormal, lightDir), 0.0);
-    float ambient = 0.15;
+    float ambient = 0.35; // Increased for base visibility
     
     // Flashlight cone lighting
     vec3 toFragment = vWorldPos - u_flashlightPos;
@@ -107,7 +107,7 @@ const ps1FragmentShader = `
       flashlight *= u_flashlightIntensity;
     }
     
-    vec3 lit = texColor.rgb * (ambient + diffuse * 0.4 + flashlight * 0.8);
+    vec3 lit = texColor.rgb * (ambient + diffuse * 0.5 + flashlight * 1.2);
     
     // Color quantization (15-bit color)
     float levels = 24.0;
@@ -130,9 +130,9 @@ const ps1FragmentShader = `
     float dither = (threshold - 0.5) * u_ditherStrength;
     lit += dither;
     
-    // Dense fog (Silent Hill style)
-    float fogFactor = 1.0 - exp(-vFogDepth * 0.05);
-    fogFactor = clamp(fogFactor, 0.0, 1.0);
+    // Controlled fog - readable darkness with depth
+    float fogFactor = 1.0 - exp(-vFogDepth * 0.03);
+    fogFactor = clamp(fogFactor, 0.0, 0.85); // Never fully opaque
     lit = mix(lit, u_fogColor, fogFactor);
     
     gl_FragColor = vec4(lit, texColor.a);
@@ -208,13 +208,18 @@ export class Game {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.BasicShadowMap; // Performance
     this.renderer.shadowMap.autoUpdate = false; // Manual updates
-    this.renderer.setClearColor(0x0a0a0a);
+    this.renderer.setClearColor(0x080810);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.6; // Dark exposure
+    this.renderer.toneMappingExposure = 1.0; // Balanced exposure - dark but readable
     
-    // Scene with dense fog
+    // Scene with controlled fog - readable darkness
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0x1a1a1a, 0.05); // Exponential fog
+    this.scene.fog = new THREE.FogExp2(0x0a0a12, 0.035); // Reduced density for visibility
+    
+    // Initialization protection
+    this.isInitialized = false;
+    this.initTimer = 0;
+    this.INVULNERABILITY_TIME = 5; // 5 seconds of safety
     
     // Camera
     this.camera = new THREE.PerspectiveCamera(
@@ -240,8 +245,12 @@ export class Game {
     this.inventorySystem = new InventorySystem(this);
     this.hallucinationSystem = new HallucinationSystem(this);
     
-    // Spawn initial enemies
-    this.enemyAI.spawnInitialEnemies(3);
+    // Spawn initial enemies - delayed to prevent immediate combat
+    setTimeout(() => {
+      if (this.isRunning) {
+        this.enemyAI.spawnInitialEnemies(2);
+      }
+    }, 8000); // 8 second grace period
     
     // Event listeners
     window.addEventListener('resize', () => this.onResize());
@@ -250,40 +259,73 @@ export class Game {
     this.isRunning = true;
     this.animate();
     
-    // Expose game state for React HUD
+    // Expose game state for React HUD - using NRL (Neural Rejection Level)
     window.gameState = {
-      sanity: 100,
+      nrl: 0, // Neural Rejection Level - 0 is stable, 100 is collapse
       health: 100,
-      ammo: 12, // Start with limited ammo
-      maxAmmo: 30,
+      ammo: 12, // Current magazine
+      maxAmmo: 30, // Magazine capacity
+      reserveAmmo: 48, // Reserve ammunition
       battery: 100,
-      flashlightOn: false,
+      flashlightOn: true, // Start with flashlight ON
       enemyCount: this.enemies.length,
       isMicActive: false,
       fearLevel: 0,
       isOtherworld: false,
-      objective: 'Find a way out'
+      objective: 'Explore the facility',
+      isInvulnerable: true // Protection during initialization
     };
+    
+    // Mark as initialized after a short delay
+    setTimeout(() => {
+      this.isInitialized = true;
+      if (window.gameState) {
+        window.gameState.isInvulnerable = false;
+      }
+    }, this.INVULNERABILITY_TIME * 1000);
   }
   
   setupLighting() {
-    // Dim ambient light
-    this.ambientLight = new THREE.AmbientLight(0x222233, 0.2);
+    // LAYERED LIGHTING SYSTEM
+    // Layer 1: World ambient - provides base visibility
+    this.ambientLight = new THREE.AmbientLight(0x334455, 0.6);
     this.scene.add(this.ambientLight);
     
-    // Flashlight (SpotLight)
-    this.flashlight = new THREE.SpotLight(0xffffee, 0, 20, Math.PI / 4, 0.5, 1);
-    this.flashlight.position.set(0, 0, 0);
-    this.flashlight.target.position.set(0, 0, -1);
-    this.flashlight.castShadow = true;
-    this.flashlight.shadow.mapSize.width = 512;
-    this.flashlight.shadow.mapSize.height = 512;
-    this.flashlight.shadow.camera.near = 0.5;
-    this.flashlight.shadow.camera.far = 20;
-    this.scene.add(this.flashlight);
-    this.scene.add(this.flashlight.target);
+    // Layer 2: Hemisphere light for subtle sky/ground color
+    const hemiLight = new THREE.HemisphereLight(0x334466, 0x111122, 0.4);
+    this.scene.add(hemiLight);
     
-    // Emergency red lights (pulsing)
+    // Layer 3: Practical fluorescent lights (main visibility sources)
+    const fluorescentPositions = [
+      { x: 0, y: 3.8, z: 0 },
+      { x: -8, y: 3.8, z: -8 },
+      { x: 8, y: 3.8, z: -8 },
+      { x: -8, y: 3.8, z: 8 },
+      { x: 8, y: 3.8, z: 8 },
+      { x: 0, y: 3.8, z: -12 },
+      { x: 0, y: 3.8, z: 12 },
+      { x: -12, y: 3.8, z: 0 },
+      { x: 12, y: 3.8, z: 0 }
+    ];
+    
+    fluorescentPositions.forEach((pos, i) => {
+      const light = new THREE.PointLight(0xddeeff, 1.2, 12, 1.5);
+      light.position.set(pos.x, pos.y, pos.z);
+      light.castShadow = i < 3; // Only first 3 cast shadows for performance
+      if (light.castShadow) {
+        light.shadow.mapSize.width = 256;
+        light.shadow.mapSize.height = 256;
+      }
+      this.scene.add(light);
+      this.flickeringLights.push({
+        light,
+        baseIntensity: 1.2,
+        nextFlicker: Date.now() + Math.random() * 5000,
+        isFluorescent: true
+      });
+    });
+    
+    // Layer 4: Emergency red lights (atmospheric)
     const emergencyPositions = [
       { x: -10, y: 3, z: -10 },
       { x: 10, y: 3, z: 10 },
@@ -292,36 +334,32 @@ export class Game {
     ];
     
     emergencyPositions.forEach(pos => {
-      const light = new THREE.PointLight(0xff0000, 0.5, 15);
+      const light = new THREE.PointLight(0xff2200, 0.8, 15);
       light.position.set(pos.x, pos.y, pos.z);
       this.scene.add(light);
       this.emergencyLights.push({
         light,
-        baseIntensity: 0.5,
+        baseIntensity: 0.8,
         phase: Math.random() * Math.PI * 2
       });
     });
     
-    // Flickering fluorescent lights
-    const flickerPositions = [
-      { x: 0, y: 3.5, z: 0 },
-      { x: -5, y: 3.5, z: -5 },
-      { x: 5, y: 3.5, z: 5 }
+    // Layer 5: Cyan accent lights (sci-fi feel)
+    const accentPositions = [
+      { x: -5, y: 0.5, z: -5 },
+      { x: 5, y: 0.5, z: 5 },
+      { x: -15, y: 0.5, z: 0 },
+      { x: 15, y: 0.5, z: 0 }
     ];
     
-    flickerPositions.forEach(pos => {
-      const light = new THREE.PointLight(0xccffcc, 0.8, 10);
+    accentPositions.forEach(pos => {
+      const light = new THREE.PointLight(0x00aaff, 0.4, 8);
       light.position.set(pos.x, pos.y, pos.z);
-      light.castShadow = true;
-      light.shadow.mapSize.width = 256;
-      light.shadow.mapSize.height = 256;
       this.scene.add(light);
-      this.flickeringLights.push({
-        light,
-        baseIntensity: 0.8,
-        nextFlicker: Date.now() + Math.random() * 5000
-      });
     });
+    
+    // Layer 6: Player flashlight (managed by CinematicCamera)
+    // Note: The CinematicCamera creates its own flashlight
   }
   
   toggleFlashlight() {
@@ -403,13 +441,14 @@ export class Game {
   }
   
   updateOtherworld(delta) {
-    const sanity = this.sanitySystem.getEffectiveSanity();
+    // NRL-based transitions (inverted from sanity)
+    const nrl = this.sanitySystem ? (100 - this.sanitySystem.getEffectiveSanity()) : 0;
     
-    // Transition triggers at sanity thresholds
+    // Transition triggers at NRL thresholds
     let targetIntensity = 0;
-    if (sanity < 75) targetIntensity = 0.3;
-    if (sanity < 50) targetIntensity = 0.6;
-    if (sanity < 25) targetIntensity = 1.0;
+    if (nrl > 25) targetIntensity = 0.3;  // Minor anomalies
+    if (nrl > 50) targetIntensity = 0.6;  // Psychological instability
+    if (nrl > 75) targetIntensity = 1.0;  // Severe degradation
     
     // Smooth transition
     this.otherworldTransition += (targetIntensity - this.otherworldTransition) * delta * 2;
@@ -485,25 +524,32 @@ export class Game {
   }
   
   updatePostProcessing(sanityEffects) {
-    // Blood vignette (increases with low health/sanity)
+    // Blood vignette (increases with low health/high NRL)
     const bloodVignette = document.getElementById('blood-vignette');
+    const playerHealth = this.player?.health ?? 100;
     const vignetteIntensity = Math.max(
       sanityEffects.vignette,
-      1 - (this.player.health / 100)
+      1 - (playerHealth / 100)
     );
-    bloodVignette.style.opacity = vignetteIntensity * 0.8;
-    
-    // Chromatic aberration (when sanity < 40%)
-    const chromatic = document.getElementById('chromatic-aberration');
-    if (sanityEffects.chromatic > 0.3) {
-      chromatic.style.opacity = sanityEffects.chromatic * 0.5;
-    } else {
-      chromatic.style.opacity = '0';
+    if (bloodVignette) {
+      bloodVignette.style.opacity = vignetteIntensity * 0.6;
     }
     
-    // Film grain (always present, increases with low sanity)
+    // Chromatic aberration (when NRL > 40%)
+    const chromatic = document.getElementById('chromatic-aberration');
+    if (chromatic) {
+      if (sanityEffects.chromatic > 0.3) {
+        chromatic.style.opacity = sanityEffects.chromatic * 0.4;
+      } else {
+        chromatic.style.opacity = '0';
+      }
+    }
+    
+    // Film grain (always present, increases with high NRL)
     const grain = document.getElementById('film-grain');
-    grain.style.opacity = 0.15 + sanityEffects.colorShift * 0.2;
+    if (grain) {
+      grain.style.opacity = 0.12 + sanityEffects.colorShift * 0.15;
+    }
   }
   
   updatePS1Effects(sanityEffects) {
@@ -539,13 +585,21 @@ export class Game {
     this.updatePS1Effects(sanityEffects);
     this.updatePostProcessing(sanityEffects);
     
-    // Update React HUD state
+    // Update React HUD state - safe number handling
     if (window.gameState) {
-      window.gameState.sanity = this.sanitySystem.getEffectiveSanity();
-      window.gameState.health = this.player.health;
-      window.gameState.ammo = this.player.ammo;
-      window.gameState.fearLevel = this.audioSystem.getFearLevel();
-      window.gameState.isMicActive = this.audioSystem.isActive;
+      // NRL: Inverted from sanity (0 = stable, 100 = collapse)
+      const sanityValue = this.sanitySystem ? this.sanitySystem.getEffectiveSanity() : 100;
+      window.gameState.nrl = Math.max(0, Math.min(100, 100 - sanityValue));
+      
+      // Safe number validation - prevent NaN/undefined
+      window.gameState.health = Number.isFinite(this.player?.health) ? this.player.health : 100;
+      window.gameState.ammo = Number.isFinite(this.player?.ammo) ? this.player.ammo : 12;
+      window.gameState.reserveAmmo = Number.isFinite(this.player?.reserveAmmo) ? this.player.reserveAmmo : 48;
+      window.gameState.maxAmmo = Number.isFinite(this.player?.maxAmmo) ? this.player.maxAmmo : 30;
+      window.gameState.battery = Number.isFinite(this.flashlightBattery) ? this.flashlightBattery : 100;
+      window.gameState.flashlightOn = this.player?.flashlightOn ?? true;
+      window.gameState.fearLevel = this.audioSystem ? this.audioSystem.getFearLevel() : 0;
+      window.gameState.isMicActive = this.audioSystem ? this.audioSystem.isActive : false;
       window.gameState.enemyCount = this.enemies.length;
       
       window.dispatchEvent(new CustomEvent('gameStateUpdate', {

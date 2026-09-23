@@ -7,8 +7,8 @@ export class SanitySystem {
     this.individualSanity = 100;
     this.fearLevel = 0;
     
-    // Decay rates (increased for horror)
-    this.baseDecayRate = 0.15; // Per second
+    // Decay rates - slower for better gameplay experience
+    this.baseDecayRate = 0.05; // Per second - very slow passive drain
     this.proximityDrain = 0;
     this.fearDrain = 0;
     

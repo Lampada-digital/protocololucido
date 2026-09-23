@@ -31,14 +31,14 @@ export class EnvironmentBuilder {
     
     switch (type) {
       case 'wall':
-        // Dirty concrete with blood stains
-        ctx.fillStyle = '#1a1a1a';
+        // Dirty concrete with blood stains - brighter base for visibility
+        ctx.fillStyle = '#2a2a30';
         ctx.fillRect(0, 0, 128, 128);
         
-        // Concrete texture
+        // Concrete texture with more variation
         for (let i = 0; i < 500; i++) {
-          const shade = 20 + Math.random() * 15;
-          ctx.fillStyle = `rgb(${shade}, ${shade}, ${shade})`;
+          const shade = 35 + Math.random() * 25;
+          ctx.fillStyle = `rgb(${shade}, ${shade}, ${shade + 5})`;
           ctx.fillRect(Math.random() * 128, Math.random() * 128, 2, 2);
         }
         
@@ -70,15 +70,15 @@ export class EnvironmentBuilder {
         break;
         
       case 'floor':
-        // Dirty tile floor
-        ctx.fillStyle = '#0d0d0d';
+        // Dirty tile floor - brighter for visibility
+        ctx.fillStyle = '#1a1a20';
         ctx.fillRect(0, 0, 128, 128);
         
-        // Tile pattern
+        // Tile pattern with more contrast
         for (let y = 0; y < 128; y += 32) {
           for (let x = 0; x < 128; x += 32) {
-            const shade = 10 + Math.random() * 10;
-            ctx.fillStyle = `rgb(${shade}, ${shade}, ${shade})`;
+            const shade = 25 + Math.random() * 15;
+            ctx.fillStyle = `rgb(${shade}, ${shade}, ${shade + 3})`;
             ctx.fillRect(x + 1, y + 1, 30, 30);
           }
         }
@@ -105,8 +105,8 @@ export class EnvironmentBuilder {
         break;
         
       case 'ceiling':
-        // Dark stained ceiling
-        ctx.fillStyle = '#0a0a0a';
+        // Dark stained ceiling - slightly brighter
+        ctx.fillStyle = '#151518';
         ctx.fillRect(0, 0, 128, 128);
         
         // Water stains

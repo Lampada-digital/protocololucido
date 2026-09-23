@@ -3,10 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>O Protocolo Lúcido</title>
+  <title>THE LUCID PROTOCOL</title>
+  <meta name="description" content="Somnus Dynamics Neural Interface - Protocol 12" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Special+Elite&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; min-height: 100vh; background: #000; overflow: hidden; }
+    #root { min-height: 100vh; }
+  </style>
 </head>
 <body>
   <div id="game-container">
@@ -32,22 +37,43 @@
     <!-- Otherworld transition -->
     <div id="otherworld-transition"></div>
     
+    <!-- Cinematic Opening -->
+    <div id="cinematic-opening">
+      <div id="cinematic-content">
+        <div id="cinematic-text"></div>
+      </div>
+    </div>
+    
     <!-- Start Screen -->
     <div id="start-screen">
       <div class="start-content">
-        <div class="title-wrapper">
-          <h1 class="horror-title glitch-text" data-text="O PROTOCOLO LÚCIDO">O PROTOCOLO LÚCIDO</h1>
-          <div class="subtitle-line"></div>
-          <p class="subtitle">What you fear is what finds you</p>
+        <div class="somnus-logo">
+          <div class="somnus-icon">◈</div>
+          <div class="somnus-text">SOMNUS DYNAMICS</div>
+          <div class="somnus-sub">NEURAL INTERFACE SYSTEMS</div>
         </div>
+        
+        <div class="title-divider"></div>
+        
+        <h1 class="horror-title glitch-text" data-text="THE LUCID PROTOCOL">THE LUCID PROTOCOL</h1>
+        <p class="protocol-id">PROTOCOL 12 // COGNITIVE CONVERGENCE</p>
+        
+        <div class="subject-info">
+          <div class="info-row"><span>SUBJECT:</span> <span>DANIEL VALE // 034</span></div>
+          <div class="info-row"><span>STATUS:</span> <span style="color: #ff4444;">NEURAL INSTABILITY DETECTED</span></div>
+          <div class="info-row"><span>SESSION:</span> <span>INTERVAL 01 — DISCONNECTION</span></div>
+        </div>
+        
         <button id="start-button">
-          <span class="btn-text">BEGIN DIVE</span>
+          <span class="btn-text">INITIATE LUCID SESSION</span>
           <span class="btn-glitch"></span>
         </button>
+        
         <div class="warning-text">
-          <p>⚠ HEADPHONES RECOMMENDED ⚠</p>
-          <p class="small">Contains flashing lights, loud sounds, and psychological horror elements</p>
+          <p>⚠ NEURAL INTERFACE ACTIVE ⚠</p>
+          <p class="small">This simulation reconstructs neural patterns. Perceptual anomalies may occur.</p>
         </div>
+        
         <div class="controls-info">
           <div class="control-group">
             <span class="key">W A S D</span> <span class="desc">Move</span>
@@ -56,22 +82,16 @@
             <span class="key">MOUSE</span> <span class="desc">Look</span>
           </div>
           <div class="control-group">
-            <span class="key">CLICK</span> <span class="desc">Shoot</span>
+            <span class="key">CLICK</span> <span class="desc">Fire</span>
           </div>
           <div class="control-group">
             <span class="key">F</span> <span class="desc">Flashlight</span>
           </div>
           <div class="control-group">
+            <span class="key">R</span> <span class="desc">Reload</span>
+          </div>
+          <div class="control-group">
             <span class="key">SHIFT</span> <span class="desc">Sprint</span>
-          </div>
-          <div class="control-group">
-            <span class="key">E</span> <span class="desc">Interact</span>
-          </div>
-          <div class="control-group">
-            <span class="key">I</span> <span class="desc">Inventory</span>
-          </div>
-          <div class="control-group">
-            <span class="key">M</span> <span class="desc">Microphone</span>
           </div>
         </div>
       </div>
@@ -80,9 +100,11 @@
     <!-- Death Screen -->
     <div id="death-screen" style="display:none;">
       <div class="death-content">
-        <h1 class="death-title">YOU DIED</h1>
-        <p class="death-subtitle">The protocol consumed you</p>
-        <button id="respawn-button">TRY AGAIN</button>
+        <div class="death-icon">◈</div>
+        <h1 class="death-title">NEURAL COLLAPSE</h1>
+        <p class="death-subtitle">Subject 034 — Cognitive coherence lost</p>
+        <p class="death-detail">The protocol has rejected your neural pattern.</p>
+        <button id="respawn-button">REINITIALIZE SESSION</button>
       </div>
     </div>
   </div>
