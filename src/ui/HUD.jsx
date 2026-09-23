@@ -16,7 +16,6 @@ export default function HUD({ gameState }) {
   
   useEffect(() => {
     if (!isGaslighting) {
-      // Show truth when sanity >= 50
       setDisplayValues({
         health: gameState.health,
         ammo: gameState.ammo,
@@ -33,13 +32,11 @@ export default function HUD({ gameState }) {
     
     switch (lieType) {
       case 'subtle_drift':
-        // Slowly drift away from truth
         fakeHealth = gameState.health + (Math.random() - 0.5) * 20 * corruptionLevel;
         fakeAmmo = gameState.ammo + Math.floor((Math.random() - 0.5) * 10 * corruptionLevel);
         break;
         
       case 'random_spikes':
-        // Occasionally show fake damage
         if (Math.random() < 0.15 * corruptionLevel) {
           fakeHealth = Math.max(0, gameState.health - 30 * corruptionLevel);
           fakeAmmo = Math.max(0, gameState.ammo - Math.floor(5 * corruptionLevel));
@@ -47,14 +44,12 @@ export default function HUD({ gameState }) {
         break;
         
       case 'inversion':
-        // Show inverted values
         fakeHealth = 100 - gameState.health;
         fakeAmmo = 30 - gameState.ammo;
         fakeSanity = 100 - gameState.sanity;
         break;
         
       case 'chaos':
-        // Completely random but trending toward death
         fakeHealth = Math.max(0, gameState.health - Math.random() * 40 * corruptionLevel);
         fakeAmmo = Math.max(0, gameState.ammo - Math.floor(Math.random() * 15 * corruptionLevel));
         fakeSanity = Math.max(0, gameState.sanity - Math.random() * 20 * corruptionLevel);
@@ -89,7 +84,8 @@ export default function HUD({ gameState }) {
         '⚠ VITAL SIGNS FAILING',
         '⚠ DIVER INTEGRITY: COMPROMISED',
         '⚠ EXTRACTION IMPOSSIBLE',
-        '⚠ REALITY UNSTABLE'
+        '⚠ REALITY UNSTABLE',
+        '⚠ THEY SEE YOU'
       ];
       setWarningText(messages[Math.floor(Math.random() * messages.length)]);
       setShowWarning(true);
@@ -119,6 +115,41 @@ export default function HUD({ gameState }) {
   
   return (
     <div className="hud-container">
+      {/* Objective */}
+      <div className="objective-text">
+        {gameState.objective}
+      </div>
+      
+      {/* Compass (spins when sanity < 30%) */}
+      <div className="compass">
+        <div 
+          className="compass-needle"
+          style={{
+            transform: gameState.sanity < 30 
+              ? `rotate(${Math.random() * 360}deg)` 
+              : 'rotate(0deg)'
+          }}
+        />
+      </div>
+      
+      {/* Radio static indicator */}
+      <div className="radio-static">
+        <span>RADIO</span>
+        <div className="static-bars">
+          {[...Array(5)].map((_, i) => (
+            <div 
+              key={i}
+              className="static-bar"
+              style={{
+                height: `${Math.min(15, gameState.fearLevel * 15 + i * 3)}px`,
+                opacity: gameState.fearLevel > 0.1 ? 1 : 0.3
+              }}
+            />
+          ))}
+        </div>
+      </div>
+      
+      {/* Main HUD bars */}
       <div className="hud-bar">
         {/* Health */}
         <div className={`hud-item ${isGlitching ? 'hud-glitch' : ''}`}>
@@ -175,10 +206,26 @@ export default function HUD({ gameState }) {
         </div>
       </div>
       
+      {/* Flashlight indicator */}
+      <div className="flashlight-indicator">
+        <span className="flashlight-icon">
+          {gameState.flashlightOn ? '🔦' : '🔌'}
+        </span>
+        <div style={{ width: '60px' }}>
+          <div className="hud-bar-fill">
+            <div 
+              className="hud-bar-inner battery-bar"
+              style={{ width: `${gameState.battery}%` }}
+            />
+          </div>
+        </div>
+        <span style={{ fontSize: '0.7rem' }}>{Math.round(gameState.battery)}%</span>
+      </div>
+      
       {/* Fear indicator */}
       {gameState.fearLevel > 0.1 && (
         <div 
-          className="absolute top-4 right-4 font-mono text-sm"
+          className="absolute top-20 right-4 font-mono text-sm"
           style={{ 
             color: '#ff0040',
             opacity: gameState.fearLevel,
@@ -190,19 +237,33 @@ export default function HUD({ gameState }) {
       )}
       
       {/* Mic status */}
-      <div className="absolute top-4 left-4 font-mono text-xs">
+      <div className="absolute top-16 left-4 font-mono text-xs">
         <span style={{ color: gameState.isMicActive ? '#00ff41' : '#666' }}>
           MIC: {gameState.isMicActive ? 'ACTIVE' : 'OFF'}
         </span>
         {!gameState.isMicActive && (
-          <span className="ml-2 text-gray-600">(Press M to enable)</span>
+          <span className="ml-2 text-gray-600">(Press M)</span>
         )}
       </div>
       
       {/* Enemy count */}
-      <div className="absolute top-12 left-4 font-mono text-xs text-gray-500">
+      <div className="absolute top-24 left-4 font-mono text-xs text-gray-500">
         THREATS: {gameState.enemyCount}
       </div>
+      
+      {/* Otherworld indicator */}
+      {gameState.isOtherworld && (
+        <div 
+          className="absolute top-1/2 left-4 font-mono text-xs"
+          style={{ 
+            color: '#ff0040',
+            textShadow: '0 0 10px #ff0040',
+            animation: 'pulse 1s infinite'
+          }}
+        >
+          ◈ OTHERWORLD ◈
+        </div>
+      )}
       
       {/* Warning overlay */}
       {showWarning && (
@@ -211,7 +272,7 @@ export default function HUD({ gameState }) {
         </div>
       )}
       
-      {/* Gaslighting indicator (subtle) */}
+      {/* Gaslighting indicator */}
       {isGaslighting && (
         <div 
           className="absolute bottom-4 left-1/2 transform -translate-x-1/2 font-mono text-xs"

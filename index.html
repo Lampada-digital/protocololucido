@@ -4,25 +4,85 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>O Protocolo Lúcido</title>
-  <meta name="description" content="A multiplayer psychological horror FPS. Enter the shared unconscious." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Special+Elite&display=swap" rel="stylesheet" />
 </head>
 <body>
   <div id="game-container">
     <canvas id="game-canvas"></canvas>
     <div id="react-root"></div>
     <div id="crosshair"></div>
+    
+    <!-- Blood vignette overlay -->
+    <div id="blood-vignette"></div>
+    
+    <!-- Film grain overlay -->
+    <div id="film-grain"></div>
+    
+    <!-- Scanline overlay -->
+    <div id="scanlines"></div>
+    
+    <!-- Chromatic aberration overlay -->
+    <div id="chromatic-aberration"></div>
+    
+    <!-- Jump scare flash -->
+    <div id="jumpscare-flash"></div>
+    
+    <!-- Otherworld transition -->
+    <div id="otherworld-transition"></div>
+    
+    <!-- Start Screen -->
     <div id="start-screen">
       <div class="start-content">
-        <h1 class="glitch-text" data-text="O PROTOCOLO LÚCIDO">O PROTOCOLO LÚCIDO</h1>
-        <p class="subtitle">Enter the shared unconscious</p>
-        <button id="start-button">BEGIN DIVE</button>
-        <div class="controls-info">
-          <p>WASD - Move | MOUSE - Look | SHIFT - Sprint | CTRL - Crouch</p>
-          <p>LEFT CLICK - Shoot | M - Toggle Mic | ESC - Menu</p>
+        <div class="title-wrapper">
+          <h1 class="horror-title glitch-text" data-text="O PROTOCOLO LÚCIDO">O PROTOCOLO LÚCIDO</h1>
+          <div class="subtitle-line"></div>
+          <p class="subtitle">What you fear is what finds you</p>
         </div>
+        <button id="start-button">
+          <span class="btn-text">BEGIN DIVE</span>
+          <span class="btn-glitch"></span>
+        </button>
+        <div class="warning-text">
+          <p>⚠ HEADPHONES RECOMMENDED ⚠</p>
+          <p class="small">Contains flashing lights, loud sounds, and psychological horror elements</p>
+        </div>
+        <div class="controls-info">
+          <div class="control-group">
+            <span class="key">W A S D</span> <span class="desc">Move</span>
+          </div>
+          <div class="control-group">
+            <span class="key">MOUSE</span> <span class="desc">Look</span>
+          </div>
+          <div class="control-group">
+            <span class="key">CLICK</span> <span class="desc">Shoot</span>
+          </div>
+          <div class="control-group">
+            <span class="key">F</span> <span class="desc">Flashlight</span>
+          </div>
+          <div class="control-group">
+            <span class="key">SHIFT</span> <span class="desc">Sprint</span>
+          </div>
+          <div class="control-group">
+            <span class="key">E</span> <span class="desc">Interact</span>
+          </div>
+          <div class="control-group">
+            <span class="key">I</span> <span class="desc">Inventory</span>
+          </div>
+          <div class="control-group">
+            <span class="key">M</span> <span class="desc">Microphone</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Death Screen -->
+    <div id="death-screen" style="display:none;">
+      <div class="death-content">
+        <h1 class="death-title">YOU DIED</h1>
+        <p class="death-subtitle">The protocol consumed you</p>
+        <button id="respawn-button">TRY AGAIN</button>
       </div>
     </div>
   </div>

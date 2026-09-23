@@ -4,16 +4,30 @@ export class AudioSystem {
     
     // Audio context
     this.audioContext = null;
+    this.masterGain = null;
+    
+    // Microphone fear detection
     this.analyser = null;
     this.mediaStream = null;
     this.dataArray = null;
     this.freqArray = null;
-    
-    // State
     this.isActive = false;
     this.isInitialized = false;
     this.currentFear = 0;
-    this.lastAnalysis = null;
+    
+    // Radio static
+    this.radioStaticGain = null;
+    this.radioStaticOsc = null;
+    this.radioStaticIntensity = 0;
+    
+    // Ambient sounds
+    this.ambientDrone = null;
+    this.ambientDroneGain = null;
+    
+    // Heartbeat
+    this.heartbeatGain = null;
+    this.heartbeatInterval = null;
+    this.heartbeatIntensity = 0;
     
     // Thresholds
     this.SCREAM_VOLUME_THRESHOLD = 0.65;
@@ -22,42 +36,55 @@ export class AudioSystem {
     this.SUSTAIN_FRAMES = 8;
     this.sustainCounter = 0;
     
-    // Spatial audio
-    this.listener = null;
-    this.enemySounds = new Map();
-    
     // Animation frame
     this.animationFrame = null;
     
-    // Keyboard fallback
-    this.panicKeyPressed = false;
-    
-    this.initKeyboardFallback();
+    this.init();
   }
   
-  initKeyboardFallback() {
-    // F key as panic button when mic is not available
-    document.addEventListener('keydown', (e) => {
-      if (e.code === 'KeyF' && !this.isActive) {
-        if (!this.panicKeyPressed) {
-          this.panicKeyPressed = true;
-          this.onPanicButton();
-        }
-      }
-    });
+  async init() {
+    try {
+      // Create audio context
+      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Master gain
+      this.masterGain = this.audioContext.createGain();
+      this.masterGain.gain.value = 0.7;
+      this.masterGain.connect(this.audioContext.destination);
+      
+      // Start ambient drone
+      this.startAmbientDrone();
+      
+      console.log('[AudioSystem] Initialized');
+    } catch (error) {
+      console.warn('[AudioSystem] Failed to initialize:', error);
+    }
+  }
+  
+  startAmbientDrone() {
+    // Low frequency drone (barely audible)
+    const osc = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
     
-    document.addEventListener('keyup', (e) => {
-      if (e.code === 'KeyF') {
-        this.panicKeyPressed = false;
-      }
-    });
+    osc.type = 'sine';
+    osc.frequency.value = 40; // Very low frequency
+    gain.gain.value = 0.05; // Barely audible
     
-    // M key to toggle mic
-    document.addEventListener('keydown', (e) => {
-      if (e.code === 'KeyM') {
-        this.toggleMicrophone();
-      }
-    });
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start();
+    
+    this.ambientDrone = osc;
+    this.ambientDroneGain = gain;
+    
+    // Modulate drone slightly
+    const lfo = this.audioContext.createOscillator();
+    const lfoGain = this.audioContext.createGain();
+    lfo.frequency.value = 0.1;
+    lfoGain.gain.value = 5;
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+    lfo.start();
   }
   
   async toggleMicrophone() {
@@ -73,7 +100,6 @@ export class AudioSystem {
   
   async initialize() {
     try {
-      // Request microphone access
       this.mediaStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -82,50 +108,29 @@ export class AudioSystem {
         }
       });
       
-      // Create audio context
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const source = this.audioContext.createMediaStreamSource(this.mediaStream);
       
-      // Create analyser
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 2048;
       this.analyser.smoothingTimeConstant = 0.3;
       
-      // Connect: mic → analyser (NOT to destination)
       source.connect(this.analyser);
       
-      // Prepare buffers
       this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
       this.freqArray = new Uint8Array(this.analyser.frequencyBinCount);
       
-      // Setup spatial audio listener
-      this.listener = this.audioContext.listener;
-      if (this.listener.positionX) {
-        // Modern API
-        this.listener.positionX.value = 0;
-        this.listener.positionY.value = 1.6;
-        this.listener.positionZ.value = 0;
-      } else {
-        // Legacy API
-        this.listener.setPosition(0, 1.6, 0);
-      }
-      
       this.isInitialized = true;
-      console.log('[AudioSystem] Microphone initialized successfully');
+      console.log('[AudioSystem] Microphone initialized');
       
       return true;
     } catch (error) {
       console.warn('[AudioSystem] Microphone access denied:', error);
-      console.log('[AudioSystem] Using keyboard fallback (F key for panic)');
       return false;
     }
   }
   
   start() {
-    if (!this.isInitialized) {
-      console.warn('[AudioSystem] Must call initialize() first');
-      return;
-    }
+    if (!this.isInitialized) return;
     
     this.isActive = true;
     this.analyze();
@@ -148,38 +153,24 @@ export class AudioSystem {
       this.mediaStream.getTracks().forEach(track => track.stop());
     }
     
-    if (this.audioContext && this.audioContext.state !== 'closed') {
-      this.audioContext.close();
-    }
-    
     this.isInitialized = false;
     
     if (window.gameState) {
       window.gameState.isMicActive = false;
     }
-    
-    console.log('[AudioSystem] Fear detection stopped');
   }
   
   analyze = () => {
-    if (!this.isActive || !this.analyser || !this.dataArray || !this.freqArray) return;
+    if (!this.isActive || !this.analyser) return;
     
-    // Get time-domain data (volume)
     this.analyser.getByteTimeDomainData(this.dataArray);
-    
-    // Get frequency data (pitch)
     this.analyser.getByteFrequencyData(this.freqArray);
     
-    // Calculate RMS volume (0-1)
     const volume = this.calculateRMS(this.dataArray);
-    
-    // Find peak frequency
     const peakFreq = this.findPeakFrequency(this.freqArray);
     
-    // Determine if this is a scream
     const isScream = volume > this.SCREAM_VOLUME_THRESHOLD && peakFreq > this.SCREAM_FREQ_THRESHOLD;
     
-    // Calculate composite fear intensity
     let fearIntensity = 0;
     if (isScream) {
       fearIntensity = Math.min(1, volume * 1.2);
@@ -192,54 +183,23 @@ export class AudioSystem {
       this.sustainCounter = 0;
     }
     
-    // Update continuous fear level
     this.currentFear = Math.max(this.currentFear, fearIntensity * 0.5);
     
-    const analysis = {
-      volume,
-      peakFrequency: peakFreq,
-      isScream: isScream && this.sustainCounter >= this.SUSTAIN_FRAMES,
-      fearIntensity: this.currentFear,
-      timestamp: Date.now()
-    };
-    
-    this.lastAnalysis = analysis;
-    
-    // Trigger scream event
-    if (analysis.isScream) {
-      this.onScreamDetected(analysis);
+    if (isScream && this.sustainCounter >= this.SUSTAIN_FRAMES) {
+      this.onScreamDetected(fearIntensity);
       this.sustainCounter = 0;
     }
     
-    // Update game state
     if (window.gameState) {
       window.gameState.fearLevel = this.currentFear;
     }
     
-    // Continue analysis loop
     this.animationFrame = requestAnimationFrame(this.analyze);
   }
   
-  onScreamDetected(analysis) {
-    console.log('[AudioSystem] SCREAM DETECTED!', analysis);
-    
-    // Notify game
-    this.game.onScream(analysis.fearIntensity);
-  }
-  
-  onPanicButton() {
-    console.log('[AudioSystem] Panic button pressed (keyboard fallback)');
-    
-    // Simulate fear spike
-    const fakeAnalysis = {
-      volume: 0.7,
-      peakFrequency: 1000,
-      isScream: true,
-      fearIntensity: 0.5,
-      timestamp: Date.now()
-    };
-    
-    this.game.onScream(fakeAnalysis.fearIntensity);
+  onScreamDetected(intensity) {
+    console.log('[AudioSystem] SCREAM DETECTED!');
+    this.game.onScream(intensity);
   }
   
   calculateRMS(data) {
@@ -272,96 +232,425 @@ export class AudioSystem {
     return this.currentFear;
   }
   
-  getLastAnalysis() {
-    return this.lastAnalysis;
-  }
-  
-  // Spatial audio for enemies
-  updateSpatialAudio(playerPosition, enemies) {
-    if (!this.audioContext || !this.listener) return;
+  // Radio static (increases near enemies)
+  updateRadioStatic(intensity) {
+    this.radioStaticIntensity = intensity;
     
-    // Update listener position
-    if (this.listener.positionX) {
-      this.listener.positionX.value = playerPosition.x;
-      this.listener.positionY.value = playerPosition.y;
-      this.listener.positionZ.value = playerPosition.z;
-    } else {
-      this.listener.setPosition(playerPosition.x, playerPosition.y, playerPosition.z);
-    }
-    
-    // Update enemy sound positions
-    enemies.forEach(enemy => {
-      const sound = this.enemySounds.get(enemy);
-      if (sound) {
-        if (sound.positionX) {
-          sound.positionX.value = enemy.position.x;
-          sound.positionY.value = enemy.position.y;
-          sound.positionZ.value = enemy.position.z;
-        } else {
-          sound.setPosition(enemy.position.x, enemy.position.y, enemy.position.z);
-        }
+    if (!this.radioStaticOsc) {
+      // Create radio static noise
+      const bufferSize = 2 * this.audioContext.sampleRate;
+      const noiseBuffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
       }
-    });
-  }
-  
-  createEnemySound(enemy) {
-    if (!this.audioContext) return null;
+      
+      this.radioStaticOsc = this.audioContext.createBufferSource();
+      this.radioStaticOsc.buffer = noiseBuffer;
+      this.radioStaticOsc.loop = true;
+      
+      this.radioStaticGain = this.audioContext.createGain();
+      this.radioStaticGain.gain.value = 0;
+      
+      // Filter to make it sound like radio
+      const filter = this.audioContext.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 2000;
+      filter.Q.value = 0.5;
+      
+      this.radioStaticOsc.connect(filter);
+      filter.connect(this.radioStaticGain);
+      this.radioStaticGain.connect(this.masterGain);
+      
+      this.radioStaticOsc.start();
+    }
     
-    // Create a creepy sound source
-    const oscillator = this.audioContext.createOscillator();
-    const gainNode = this.audioContext.createGain();
-    const panner = this.audioContext.createPanner();
+    // Adjust volume based on intensity
+    this.radioStaticGain.gain.value = intensity * 0.3;
     
-    // Configure panner for 3D audio
-    panner.panningModel = 'HRTF';
-    panner.distanceModel = 'inverse';
-    panner.refDistance = 1;
-    panner.maxDistance = 20;
-    panner.rolloffFactor = 1;
-    
-    if (panner.positionX) {
-      panner.positionX.value = enemy.position.x;
-      panner.positionY.value = enemy.position.y;
-      panner.positionZ.value = enemy.position.z;
+    // Increase pitch when very close (screeching)
+    if (intensity > 0.7) {
+      this.radioStaticOsc.playbackRate.value = 1.5;
     } else {
-      panner.setPosition(enemy.position.x, enemy.position.y, enemy.position.z);
+      this.radioStaticOsc.playbackRate.value = 1.0;
     }
-    
-    // Creepy low-frequency sound
-    oscillator.type = 'sawtooth';
-    oscillator.frequency.value = 50 + Math.random() * 30;
-    
-    gainNode.gain.value = 0.1;
-    
-    // Connect: oscillator → gain → panner → destination
-    oscillator.connect(gainNode);
-    gainNode.connect(panner);
-    panner.connect(this.audioContext.destination);
-    
-    oscillator.start();
-    
-    this.enemySounds.set(enemy, panner);
-    
-    return { oscillator, gainNode, panner };
   }
   
-  removeEnemySound(enemy) {
-    const sound = this.enemySounds.get(enemy);
-    if (sound) {
-      sound.oscillator.stop();
-      sound.oscillator.disconnect();
-      sound.gainNode.disconnect();
-      sound.panner.disconnect();
-      this.enemySounds.delete(enemy);
+  // Heartbeat (when sanity is low)
+  updateHeartbeat(intensity) {
+    this.heartbeatIntensity = intensity;
+    
+    if (!this.heartbeatGain && intensity > 0) {
+      this.heartbeatGain = this.audioContext.createGain();
+      this.heartbeatGain.gain.value = 0;
+      this.heartbeatGain.connect(this.masterGain);
+      
+      this.startHeartbeatLoop();
     }
+    
+    if (this.heartbeatGain) {
+      this.heartbeatGain.gain.value = intensity * 0.4;
+    }
+  }
+  
+  startHeartbeatLoop() {
+    const playBeat = () => {
+      if (!this.heartbeatGain || this.heartbeatIntensity <= 0) return;
+      
+      // Create heartbeat sound
+      const osc = this.audioContext.createOscillator();
+      const gain = this.audioContext.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.value = 60;
+      
+      gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+      gain.gain.linearRampToValueAtTime(0.5, this.audioContext.currentTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.2);
+      
+      osc.connect(gain);
+      gain.connect(this.heartbeatGain);
+      
+      osc.start();
+      osc.stop(this.audioContext.currentTime + 0.2);
+      
+      // Second beat (lub-dub)
+      setTimeout(() => {
+        if (!this.heartbeatGain) return;
+        
+        const osc2 = this.audioContext.createOscillator();
+        const gain2 = this.audioContext.createGain();
+        
+        osc2.type = 'sine';
+        osc2.frequency.value = 50;
+        
+        gain2.gain.setValueAtTime(0, this.audioContext.currentTime);
+        gain2.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.05);
+        gain2.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.15);
+        
+        osc2.connect(gain2);
+        gain2.connect(this.heartbeatGain);
+        
+        osc2.start();
+        osc2.stop(this.audioContext.currentTime + 0.15);
+      }, 200);
+      
+      // Schedule next beat based on intensity
+      const interval = 1000 - (this.heartbeatIntensity * 400);
+      setTimeout(playBeat, interval);
+    };
+    
+    playBeat();
+  }
+  
+  // Sound effects
+  playFootstep(isSprinting) {
+    if (!this.audioContext) return;
+    
+    const osc = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.value = isSprinting ? 150 : 100;
+    
+    gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+    gain.gain.linearRampToValueAtTime(0.1, this.audioContext.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.1);
+    
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    
+    osc.start();
+    osc.stop(this.audioContext.currentTime + 0.1);
+  }
+  
+  playBreathing(heavy) {
+    if (!this.audioContext) return;
+    
+    // White noise for breathing
+    const bufferSize = this.audioContext.sampleRate * 0.5;
+    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * 0.3;
+    }
+    
+    const source = this.audioContext.createBufferSource();
+    source.buffer = buffer;
+    
+    const gain = this.audioContext.createGain();
+    gain.gain.value = heavy ? 0.15 : 0.08;
+    
+    const filter = this.audioContext.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 500;
+    
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+    
+    source.start();
+  }
+  
+  playGunshot() {
+    if (!this.audioContext) return;
+    
+    // Loud noise burst
+    const bufferSize = this.audioContext.sampleRate * 0.2;
+    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.1));
+    }
+    
+    const source = this.audioContext.createBufferSource();
+    source.buffer = buffer;
+    
+    const gain = this.audioContext.createGain();
+    gain.gain.value = 0.5;
+    
+    source.connect(gain);
+    gain.connect(this.masterGain);
+    
+    source.start();
+  }
+  
+  playEnemyGroan() {
+    if (!this.audioContext) return;
+    
+    const osc = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    
+    osc.type = 'sawtooth';
+    osc.frequency.value = 80 + Math.random() * 40;
+    
+    gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+    gain.gain.linearRampToValueAtTime(0.2, this.audioContext.currentTime + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 1);
+    
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    
+    osc.start();
+    osc.stop(this.audioContext.currentTime + 1);
+  }
+  
+  playEnemyAttack() {
+    if (!this.audioContext) return;
+    
+    const osc = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    
+    osc.type = 'square';
+    osc.frequency.value = 200;
+    
+    gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+    gain.gain.linearRampToValueAtTime(0.4, this.audioContext.currentTime + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.3);
+    
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    
+    osc.start();
+    osc.stop(this.audioContext.currentTime + 0.3);
+  }
+  
+  playEnemyHit() {
+    if (!this.audioContext) return;
+    
+    const osc = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.value = 300;
+    
+    gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+    gain.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.2);
+    
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    
+    osc.start();
+    osc.stop(this.audioContext.currentTime + 0.2);
+  }
+  
+  playEnemySpawn() {
+    if (!this.audioContext) return;
+    
+    // Eerie spawn sound
+    const osc = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(100, this.audioContext.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(50, this.audioContext.currentTime + 1);
+    
+    gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+    gain.gain.linearRampToValueAtTime(0.2, this.audioContext.currentTime + 0.2);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 1);
+    
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    
+    osc.start();
+    osc.stop(this.audioContext.currentTime + 1);
+  }
+  
+  playPain() {
+    if (!this.audioContext) return;
+    
+    const osc = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    
+    osc.type = 'sawtooth';
+    osc.frequency.value = 400;
+    
+    gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+    gain.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.3);
+    
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    
+    osc.start();
+    osc.stop(this.audioContext.currentTime + 0.3);
+  }
+  
+  playHeal() {
+    if (!this.audioContext) return;
+    
+    const osc = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(300, this.audioContext.currentTime);
+    osc.frequency.linearRampToValueAtTime(500, this.audioContext.currentTime + 0.3);
+    
+    gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+    gain.gain.linearRampToValueAtTime(0.2, this.audioContext.currentTime + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.5);
+    
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    
+    osc.start();
+    osc.stop(this.audioContext.currentTime + 0.5);
+  }
+  
+  playSiren() {
+    if (!this.audioContext) return;
+    
+    const osc = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(400, this.audioContext.currentTime);
+    osc.frequency.linearRampToValueAtTime(800, this.audioContext.currentTime + 0.5);
+    osc.frequency.linearRampToValueAtTime(400, this.audioContext.currentTime + 1);
+    
+    gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+    gain.gain.linearRampToValueAtTime(0.3, this.audioContext.currentTime + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 1.5);
+    
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    
+    osc.start();
+    osc.stop(this.audioContext.currentTime + 1.5);
+  }
+  
+  playJumpScare() {
+    if (!this.audioContext) return;
+    
+    // Loud screech
+    const bufferSize = this.audioContext.sampleRate * 0.5;
+    const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
+    }
+    
+    const source = this.audioContext.createBufferSource();
+    source.buffer = buffer;
+    
+    const gain = this.audioContext.createGain();
+    gain.gain.value = 0.8;
+    
+    source.connect(gain);
+    gain.connect(this.masterGain);
+    
+    source.start();
+  }
+  
+  playDeath() {
+    if (!this.audioContext) return;
+    
+    // Low rumble
+    const osc = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.value = 30;
+    
+    gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+    gain.gain.linearRampToValueAtTime(0.5, this.audioContext.currentTime + 0.5);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 3);
+    
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    
+    osc.start();
+    osc.stop(this.audioContext.currentTime + 3);
+  }
+  
+  playPhoneRing() {
+    if (!this.audioContext) return;
+    
+    // Phone ringing sound
+    const osc1 = this.audioContext.createOscillator();
+    const osc2 = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    
+    osc1.frequency.value = 440;
+    osc2.frequency.value = 480;
+    
+    gain.gain.setValueAtTime(0, this.audioContext.currentTime);
+    
+    // Ring pattern
+    for (let i = 0; i < 3; i++) {
+      const time = this.audioContext.currentTime + i * 0.5;
+      gain.gain.linearRampToValueAtTime(0.2, time + 0.05);
+      gain.gain.linearRampToValueAtTime(0, time + 0.4);
+    }
+    
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(this.masterGain);
+    
+    osc1.start();
+    osc2.start();
+    osc1.stop(this.audioContext.currentTime + 1.5);
+    osc2.stop(this.audioContext.currentTime + 1.5);
   }
   
   cleanup() {
     this.stop();
     
-    // Remove all enemy sounds
-    this.enemySounds.forEach((sound, enemy) => {
-      this.removeEnemySound(enemy);
-    });
+    if (this.ambientDrone) {
+      this.ambientDrone.stop();
+    }
+    
+    if (this.radioStaticOsc) {
+      this.radioStaticOsc.stop();
+    }
+    
+    if (this.audioContext) {
+      this.audioContext.close();
+    }
   }
 }

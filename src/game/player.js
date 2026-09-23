@@ -11,18 +11,18 @@ export class Player {
     this.direction = new THREE.Vector3();
     this.position = new THREE.Vector3(0, 1.6, 0);
     
-    // Player stats
+    // Survival stats
     this.health = 100;
-    this.ammo = 30;
+    this.ammo = 12; // Start with limited ammo
     this.maxAmmo = 30;
     this.isReloading = false;
     
     // Movement settings
-    this.walkSpeed = 5;
-    this.sprintSpeed = 8;
-    this.crouchSpeed = 2.5;
-    this.jumpForce = 5;
-    this.gravity = 10;
+    this.walkSpeed = 4;
+    this.sprintSpeed = 7;
+    this.crouchSpeed = 2;
+    this.jumpForce = 4;
+    this.gravity = 12;
     this.mouseSensitivity = 0.002;
     
     // State flags
@@ -55,23 +55,29 @@ export class Player {
     this.bobTimer = 0;
     this.bobAmount = 0;
     
-    // Muzzle flash
-    this.muzzleFlashTime = 0;
+    // Footstep timer
+    this.footstepTimer = 0;
+    this.footstepInterval = 0.5;
+    
+    // Breathing/heartbeat
+    this.breathTimer = 0;
+    this.heartbeatIntensity = 0;
+    
+    // Stamina
+    this.stamina = 100;
+    this.staminaDrain = 15; // Per second while sprinting
+    this.staminaRegen = 10; // Per second while not sprinting
     
     this.initControls();
     this.initPointerLock();
   }
   
   initControls() {
-    // Keyboard
     document.addEventListener('keydown', (e) => this.onKeyDown(e));
     document.addEventListener('keyup', (e) => this.onKeyUp(e));
-    
-    // Mouse
     document.addEventListener('mousemove', (e) => this.onMouseMove(e));
     document.addEventListener('mousedown', (e) => this.onMouseDown(e));
     
-    // Pointer lock change
     document.addEventListener('pointerlockchange', () => {
       this.isPointerLocked = document.pointerLockElement !== null;
     });
@@ -94,7 +100,9 @@ export class Player {
       case 'KeyD': this.moveRight = true; break;
       case 'ShiftLeft':
       case 'ShiftRight':
-        this.isSprinting = true;
+        if (this.stamina > 10) {
+          this.isSprinting = true;
+        }
         break;
       case 'ControlLeft':
       case 'ControlRight':
@@ -111,9 +119,17 @@ export class Player {
         this.reload();
         break;
       case 'KeyF':
-        // Panic button (fallback for no mic)
-        if (this.game.audioSystem && !this.game.audioSystem.isActive) {
-          this.game.onScream(0.5);
+        this.game.toggleFlashlight();
+        break;
+      case 'KeyE':
+        this.interact();
+        break;
+      case 'KeyI':
+        this.toggleInventory();
+        break;
+      case 'KeyM':
+        if (this.game.audioSystem) {
+          this.game.audioSystem.toggleMicrophone();
         }
         break;
     }
@@ -148,7 +164,6 @@ export class Player {
     this.yawObject.rotation.y -= movementX * this.mouseSensitivity;
     this.pitchObject.rotation.x -= movementY * this.mouseSensitivity;
     
-    // Clamp pitch
     this.pitchObject.rotation.x = Math.max(
       -Math.PI / 2 + 0.01,
       Math.min(Math.PI / 2 - 0.01, this.pitchObject.rotation.x)
@@ -167,15 +182,18 @@ export class Player {
     if (this.ammo <= 0 || this.isReloading) return;
     
     this.ammo--;
-    this.muzzleFlashTime = Date.now();
     
-    // Setup raycaster from camera center
     this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
-    
-    // Notify game of shot
     this.game.onShoot(this.raycaster);
     
-    // Auto-reload when empty
+    // Play gunshot sound
+    if (this.game.audioSystem) {
+      this.game.audioSystem.playGunshot();
+    }
+    
+    // Camera recoil
+    this.pitchObject.rotation.x += 0.02;
+    
     if (this.ammo <= 0) {
       setTimeout(() => this.reload(), 500);
     }
@@ -184,57 +202,104 @@ export class Player {
   reload() {
     if (this.isReloading || this.ammo >= this.maxAmmo) return;
     
+    // Check if we have ammo in inventory
+    const ammoItem = this.game.inventorySystem.getItem('ammo');
+    if (!ammoItem || ammoItem.count <= 0) return;
+    
     this.isReloading = true;
     
-    // Reload takes 2 seconds
     setTimeout(() => {
-      this.ammo = this.maxAmmo;
+      const needed = this.maxAmmo - this.ammo;
+      const available = Math.min(needed, ammoItem.count);
+      
+      this.ammo += available;
+      ammoItem.count -= available;
+      
+      if (ammoItem.count <= 0) {
+        this.game.inventorySystem.removeItem('ammo');
+      }
+      
       this.isReloading = false;
     }, 2000);
+  }
+  
+  interact() {
+    // Raycast forward to find interactable objects
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+    raycaster.far = 3;
+    
+    const interactables = this.scene.children.filter(obj => obj.userData.interactable);
+    const intersects = raycaster.intersectObjects(interactables, true);
+    
+    if (intersects.length > 0) {
+      const target = intersects[0].object;
+      const interactable = target.userData.interactable ? target : target.parent;
+      
+      if (interactable && interactable.userData.onInteract) {
+        interactable.userData.onInteract(this.game);
+      }
+    }
+  }
+  
+  toggleInventory() {
+    if (this.game.inventorySystem) {
+      this.game.inventorySystem.toggleUI();
+    }
   }
   
   takeDamage(amount) {
     this.health = Math.max(0, this.health - amount);
     
-    // Screen shake effect
-    this.cameraShake(0.1, 200);
+    this.game.cameraShake(0.15, 300);
+    
+    if (this.game.audioSystem) {
+      this.game.audioSystem.playPain();
+    }
     
     if (this.health <= 0) {
       this.onDeath();
     }
   }
   
-  cameraShake(intensity, duration) {
-    const startTime = Date.now();
-    const shake = () => {
-      const elapsed = Date.now() - startTime;
-      if (elapsed < duration) {
-        const progress = elapsed / duration;
-        const shakeIntensity = intensity * (1 - progress);
-        
-        this.camera.position.x += (Math.random() - 0.5) * shakeIntensity;
-        this.camera.position.y += (Math.random() - 0.5) * shakeIntensity;
-        
-        requestAnimationFrame(shake);
-      }
-    };
-    shake();
+  heal(amount) {
+    this.health = Math.min(100, this.health + amount);
   }
   
   onDeath() {
-    // Game over logic
-    console.log('Player died');
-    // Reset after delay
-    setTimeout(() => {
+    const deathScreen = document.getElementById('death-screen');
+    deathScreen.style.display = 'flex';
+    
+    this.game.isRunning = false;
+    
+    if (this.game.audioSystem) {
+      this.game.audioSystem.playDeath();
+    }
+    
+    // Respawn button
+    document.getElementById('respawn-button').onclick = () => {
+      deathScreen.style.display = 'none';
       this.health = 100;
-      this.ammo = this.maxAmmo;
+      this.ammo = 12;
       this.position.set(0, 1.6, 0);
       this.yawObject.position.copy(this.position);
-    }, 3000);
+      this.game.isRunning = true;
+      this.game.sanitySystem.reset();
+    };
   }
   
   update(delta) {
     if (!this.isPointerLocked) return;
+    
+    // Update stamina
+    if (this.isSprinting && (this.moveForward || this.moveBackward || this.moveLeft || this.moveRight)) {
+      this.stamina = Math.max(0, this.stamina - this.staminaDrain * delta);
+      if (this.stamina <= 0) {
+        this.isSprinting = false;
+      }
+    } else {
+      this.stamina = Math.min(100, this.stamina + this.staminaRegen * delta);
+    }
     
     // Calculate movement speed
     let speed = this.walkSpeed;
@@ -260,7 +325,6 @@ export class Player {
     right.y = 0;
     right.normalize();
     
-    // Apply velocity
     const moveX = (forward.x * this.direction.z + right.x * this.direction.x) * speed * delta;
     const moveZ = (forward.z * this.direction.z + right.z * this.direction.x) * speed * delta;
     
@@ -276,13 +340,24 @@ export class Player {
       this.isGrounded = true;
     }
     
-    // Wall collision (simple bounds)
+    // Wall collision (bounds)
     this.yawObject.position.x = Math.max(-19, Math.min(19, this.yawObject.position.x));
     this.yawObject.position.z = Math.max(-19, Math.min(19, this.yawObject.position.z));
     
-    // Weapon bob when moving
-    const isMoving = this.direction.length() > 0;
-    if (isMoving && this.isGrounded) {
+    // Footsteps
+    const isMoving = this.direction.length() > 0 && this.isGrounded;
+    if (isMoving) {
+      this.footstepTimer += delta;
+      const interval = this.isSprinting ? 0.35 : 0.5;
+      
+      if (this.footstepTimer >= interval) {
+        this.footstepTimer = 0;
+        if (this.game.audioSystem) {
+          this.game.audioSystem.playFootstep(this.isSprinting);
+        }
+      }
+      
+      // Weapon bob
       this.bobTimer += delta * (this.isSprinting ? 12 : 8);
       this.bobAmount = Math.sin(this.bobTimer) * 0.03;
       this.camera.position.y = this.bobAmount;
@@ -291,9 +366,28 @@ export class Player {
       this.camera.position.y = this.bobAmount;
     }
     
-    // Muzzle flash decay
-    if (Date.now() - this.muzzleFlashTime > 50) {
-      this.muzzleFlashTime = 0;
+    // Breathing/heartbeat based on state
+    this.updateBreathing(delta);
+  }
+  
+  updateBreathing(delta) {
+    const sanity = this.game.sanitySystem.getEffectiveSanity();
+    
+    // Heavy breathing when sprinting or low sanity
+    const shouldBreatheHeavy = this.isSprinting || sanity < 40;
+    
+    if (shouldBreatheHeavy && this.game.audioSystem) {
+      this.breathTimer += delta;
+      if (this.breathTimer > 2) {
+        this.breathTimer = 0;
+        this.game.audioSystem.playBreathing(sanity < 30);
+      }
+    }
+    
+    // Heartbeat when sanity is very low
+    if (sanity < 30 && this.game.audioSystem) {
+      this.heartbeatIntensity = (30 - sanity) / 30;
+      this.game.audioSystem.updateHeartbeat(this.heartbeatIntensity);
     }
   }
   
