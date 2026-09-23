@@ -67,6 +67,14 @@ export class CinematicCamera {
     this.staminaDrain = 12;
     this.staminaRegen = 8;
     
+    // Combat
+    this.health = 100;
+    this.maxHealth = 100;
+    this.ammo = 12;
+    this.maxAmmo = 30;
+    this.reserveAmmo = 48;
+    this.isReloading = false;
+    
     // Interaction
     this.interactionRaycaster = new THREE.Raycaster();
     this.interactionDistance = 3;
@@ -95,8 +103,8 @@ export class CinematicCamera {
   }
   
   initFlashlight() {
-    // Main flashlight (SpotLight)
-    this.flashlight = new THREE.SpotLight(0xffffee, 0, 25, Math.PI / 5, 0.4, 1.5);
+    // Main flashlight (SpotLight) - starts ON for visibility
+    this.flashlight = new THREE.SpotLight(0xfff5e0, 4, 25, Math.PI / 5, 0.4, 1.5);
     this.flashlight.position.set(0, 0, 0);
     this.flashlight.target.position.set(0, 0, -1);
     this.flashlight.castShadow = true;
@@ -110,9 +118,9 @@ export class CinematicCamera {
     // Volumetric god rays (cone mesh with additive blending)
     const coneGeo = new THREE.ConeGeometry(3, 20, 32, 1, true);
     const coneMat = new THREE.MeshBasicMaterial({
-      color: 0xffffee,
+      color: 0xfff5e0,
       transparent: true,
-      opacity: 0.03,
+      opacity: 0.05,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
       depthWrite: false
@@ -121,8 +129,11 @@ export class CinematicCamera {
     this.godRayMesh = new THREE.Mesh(coneGeo, coneMat);
     this.godRayMesh.rotation.x = Math.PI / 2;
     this.godRayMesh.position.z = -10;
-    this.godRayMesh.visible = false;
+    this.godRayMesh.visible = true; // Start visible
     this.scene.add(this.godRayMesh);
+    
+    // Flashlight starts ON
+    this.flashlightOn = true;
   }
   
   toggleFlashlight() {
@@ -186,6 +197,90 @@ export class CinematicCamera {
     }
   }
   
+  shoot() {
+    if (this.ammo <= 0 || this.isReloading) return;
+    
+    this.ammo--;
+    
+    // Raycast from camera center
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+    
+    // Notify game of shot
+    if (this.game && this.game.onShoot) {
+      this.game.onShoot(raycaster);
+    }
+    
+    // Camera recoil
+    this.camera.rotation.x += 0.015;
+    
+    // Auto-reload when empty
+    if (this.ammo <= 0) {
+      setTimeout(() => this.reload(), 500);
+    }
+  }
+  
+  reload() {
+    if (this.isReloading || this.ammo >= this.maxAmmo || this.reserveAmmo <= 0) return;
+    
+    this.isReloading = true;
+    
+    setTimeout(() => {
+      const needed = this.maxAmmo - this.ammo;
+      const available = Math.min(needed, this.reserveAmmo);
+      
+      this.ammo += available;
+      this.reserveAmmo -= available;
+      
+      this.isReloading = false;
+    }, 1500);
+  }
+  
+  takeDamage(amount) {
+    this.health = Math.max(0, this.health - amount);
+    
+    if (this.game && this.game.cameraShake) {
+      this.game.cameraShake(0.1, 200);
+    }
+    
+    if (this.health <= 0) {
+      this.onDeath();
+    }
+  }
+  
+  heal(amount) {
+    this.health = Math.min(this.maxHealth, this.health + amount);
+  }
+  
+  onDeath() {
+    const deathScreen = document.getElementById('death-screen');
+    if (deathScreen) {
+      deathScreen.style.display = 'flex';
+    }
+    
+    if (this.game) {
+      this.game.isRunning = false;
+    }
+    
+    // Respawn button
+    const respawnButton = document.getElementById('respawn-button');
+    if (respawnButton) {
+      respawnButton.onclick = () => {
+        if (deathScreen) deathScreen.style.display = 'none';
+        this.health = this.maxHealth;
+        this.ammo = 12;
+        this.reserveAmmo = 48;
+        this.yawObject.position.set(0, 1.7, 0);
+        if (this.game) {
+          this.game.isRunning = true;
+          if (this.game.sanitySystem) {
+            this.game.sanitySystem.reset();
+          }
+        }
+      };
+    }
+  }
+  
   onKeyDown(event) {
     switch (event.code) {
       case 'KeyW': this.moveForward = true; break;
@@ -207,6 +302,9 @@ export class CinematicCamera {
         break;
       case 'KeyE':
         this.interact();
+        break;
+      case 'KeyR':
+        this.reload();
         break;
     }
   }
@@ -248,7 +346,7 @@ export class CinematicCamera {
     if (!this.isPointerLocked) return;
     
     if (event.button === 0) {
-      // Shoot or melee (future implementation)
+      this.shoot();
     }
   }
   
