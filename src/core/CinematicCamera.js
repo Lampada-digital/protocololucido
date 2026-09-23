@@ -74,6 +74,8 @@ export class CinematicCamera {
     this.maxAmmo = 30;
     this.reserveAmmo = 48;
     this.isReloading = false;
+    this.hasWeapon = false;
+    this.showWeaponInfo = false;
     
     // Interaction
     this.interactionRaycaster = new THREE.Raycaster();
@@ -198,9 +200,15 @@ export class CinematicCamera {
   }
   
   shoot() {
-    if (this.ammo <= 0 || this.isReloading) return;
+    if (!this.hasWeapon || this.ammo <= 0 || this.isReloading) return;
     
     this.ammo--;
+    
+    // Show weapon info briefly
+    this.showWeaponInfo = true;
+    setTimeout(() => {
+      this.showWeaponInfo = false;
+    }, 1500);
     
     // Raycast from camera center
     const raycaster = new THREE.Raycaster();

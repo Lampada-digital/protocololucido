@@ -15,6 +15,552 @@ export class EnvironmentBuilder {
     this.addInteractables();
   }
   
+  buildLaboratory() {
+    // Build a realistic Somnus Dynamics laboratory facility
+    this.createLabTextures();
+    
+    // Room 1: Medical Bay (starting room)
+    this.buildMedicalBay();
+    
+    // Corridor connecting rooms
+    this.buildCorridor();
+    
+    // Room 2: Observation Room
+    this.buildObservationRoom();
+    
+    // Room 3: Server Room
+    this.buildServerRoom();
+    
+    // Room 4: Security Checkpoint
+    this.buildSecurityCheckpoint();
+    
+    // Add interactive objects
+    this.addLabInteractables();
+  }
+  
+  createLabTextures() {
+    // Clean corporate textures
+    this.wallTexture = this.createLabWallTexture();
+    this.floorTexture = this.createLabFloorTexture();
+    this.ceilingTexture = this.createLabCeilingTexture();
+    this.metalTexture = this.createMetalTexture();
+  }
+  
+  createLabWallTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    
+    // Clean white/gray corporate wall
+    ctx.fillStyle = '#2a2a30';
+    ctx.fillRect(0, 0, 256, 256);
+    
+    // Subtle panel lines
+    ctx.strokeStyle = '#1a1a20';
+    ctx.lineWidth = 2;
+    for (let y = 0; y < 256; y += 64) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(256, y);
+      ctx.stroke();
+    }
+    
+    // Somnus logo hint (subtle)
+    ctx.fillStyle = 'rgba(0, 170, 255, 0.05)';
+    ctx.font = 'bold 40px Arial';
+    ctx.fillText('◈', 108, 140);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(2, 2);
+    
+    return texture;
+  }
+  
+  createLabFloorTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    
+    // Clean tile floor
+    ctx.fillStyle = '#1a1a20';
+    ctx.fillRect(0, 0, 256, 256);
+    
+    // Tile pattern
+    for (let y = 0; y < 256; y += 32) {
+      for (let x = 0; x < 256; x += 32) {
+        ctx.fillStyle = '#222228';
+        ctx.fillRect(x + 1, y + 1, 30, 30);
+      }
+    }
+    
+    // Subtle reflection
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+    ctx.fillRect(0, 0, 256, 256);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(4, 4);
+    
+    return texture;
+  }
+  
+  createLabCeilingTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    
+    // Ceiling with fluorescent light panels
+    ctx.fillStyle = '#151518';
+    ctx.fillRect(0, 0, 256, 256);
+    
+    // Light panel
+    ctx.fillStyle = '#3a3a40';
+    ctx.fillRect(96, 96, 64, 64);
+    
+    // Light glow
+    const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 32);
+    gradient.addColorStop(0, 'rgba(200, 220, 255, 0.3)');
+    gradient.addColorStop(1, 'rgba(200, 220, 255, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(96, 96, 64, 64);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(3, 3);
+    
+    return texture;
+  }
+  
+  buildMedicalBay() {
+    // Starting room - medical bay where Daniel wakes up
+    const roomSize = 12;
+    const wallHeight = 4;
+    
+    // Floor
+    const floorGeo = new THREE.PlaneGeometry(roomSize, roomSize);
+    const floorMat = this.createPS1Material(this.floorTexture);
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, 0, 0);
+    floor.receiveShadow = true;
+    this.game.scene.add(floor);
+    
+    // Ceiling
+    const ceilingGeo = new THREE.PlaneGeometry(roomSize, roomSize);
+    const ceilingMat = this.createPS1Material(this.ceilingTexture);
+    const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.set(0, wallHeight, 0);
+    this.game.scene.add(ceiling);
+    
+    // Walls
+    const wallMat = this.createPS1Material(this.wallTexture);
+    
+    // Back wall
+    const backWall = new THREE.Mesh(
+      new THREE.BoxGeometry(roomSize, wallHeight, 0.3),
+      wallMat
+    );
+    backWall.position.set(0, wallHeight / 2, -roomSize / 2);
+    backWall.castShadow = true;
+    backWall.receiveShadow = true;
+    this.game.scene.add(backWall);
+    
+    // Left wall
+    const leftWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, wallHeight, roomSize),
+      wallMat
+    );
+    leftWall.position.set(-roomSize / 2, wallHeight / 2, 0);
+    leftWall.castShadow = true;
+    leftWall.receiveShadow = true;
+    this.game.scene.add(leftWall);
+    
+    // Right wall
+    const rightWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, wallHeight, roomSize),
+      wallMat
+    );
+    rightWall.position.set(roomSize / 2, wallHeight / 2, 0);
+    rightWall.castShadow = true;
+    rightWall.receiveShadow = true;
+    this.game.scene.add(rightWall);
+    
+    // Front wall with door opening
+    const frontWallLeft = new THREE.Mesh(
+      new THREE.BoxGeometry(4, wallHeight, 0.3),
+      wallMat
+    );
+    frontWallLeft.position.set(-4, wallHeight / 2, roomSize / 2);
+    frontWallLeft.castShadow = true;
+    this.game.scene.add(frontWallLeft);
+    
+    const frontWallRight = new THREE.Mesh(
+      new THREE.BoxGeometry(4, wallHeight, 0.3),
+      wallMat
+    );
+    frontWallRight.position.set(4, wallHeight / 2, roomSize / 2);
+    frontWallRight.castShadow = true;
+    this.game.scene.add(frontWallRight);
+    
+    // Medical equipment
+    this.addMedicalEquipment();
+    
+    // Fluorescent light
+    const light = new THREE.PointLight(0xddeeff, 1.5, 10);
+    light.position.set(0, 3.5, 0);
+    light.castShadow = true;
+    this.game.scene.add(light);
+  }
+  
+  addMedicalEquipment() {
+    // Medical bed
+    const bedGeo = new THREE.BoxGeometry(2, 0.5, 1);
+    const bedMat = new THREE.MeshStandardMaterial({ color: 0x333340, metalness: 0.3 });
+    const bed = new THREE.Mesh(bedGeo, bedMat);
+    bed.position.set(-3, 0.5, -3);
+    bed.castShadow = true;
+    this.game.scene.add(bed);
+    
+    // Monitor
+    const monitorGeo = new THREE.BoxGeometry(0.8, 0.6, 0.1);
+    const monitorMat = new THREE.MeshStandardMaterial({ 
+      color: 0x000000, 
+      emissive: 0x00aaff, 
+      emissiveIntensity: 0.3 
+    });
+    const monitor = new THREE.Mesh(monitorGeo, monitorMat);
+    monitor.position.set(-3, 1.5, -4);
+    this.game.scene.add(monitor);
+    
+    // Cables
+    for (let i = 0; i < 3; i++) {
+      const cableGeo = new THREE.CylinderGeometry(0.02, 0.02, 2);
+      const cableMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+      const cable = new THREE.Mesh(cableGeo, cableMat);
+      cable.position.set(-3 + i * 0.3, 1, -3.5);
+      cable.rotation.z = Math.PI / 4;
+      this.game.scene.add(cable);
+    }
+  }
+  
+  buildCorridor() {
+    // Corridor connecting rooms
+    const corridorLength = 15;
+    const corridorWidth = 3;
+    const wallHeight = 4;
+    
+    // Floor
+    const floorGeo = new THREE.PlaneGeometry(corridorWidth, corridorLength);
+    const floorMat = this.createPS1Material(this.floorTexture);
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, 0, 6 + corridorLength / 2);
+    floor.receiveShadow = true;
+    this.game.scene.add(floor);
+    
+    // Ceiling
+    const ceilingGeo = new THREE.PlaneGeometry(corridorWidth, corridorLength);
+    const ceilingMat = this.createPS1Material(this.ceilingTexture);
+    const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.set(0, wallHeight, 6 + corridorLength / 2);
+    this.game.scene.add(ceiling);
+    
+    // Walls
+    const wallMat = this.createPS1Material(this.wallTexture);
+    
+    const leftWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, wallHeight, corridorLength),
+      wallMat
+    );
+    leftWall.position.set(-corridorWidth / 2, wallHeight / 2, 6 + corridorLength / 2);
+    leftWall.castShadow = true;
+    this.game.scene.add(leftWall);
+    
+    const rightWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, wallHeight, corridorLength),
+      wallMat
+    );
+    rightWall.position.set(corridorWidth / 2, wallHeight / 2, 6 + corridorLength / 2);
+    rightWall.castShadow = true;
+    this.game.scene.add(rightWall);
+    
+    // Corridor lights
+    for (let i = 0; i < 3; i++) {
+      const light = new THREE.PointLight(0xddeeff, 1, 8);
+      light.position.set(0, 3.5, 8 + i * 5);
+      this.game.scene.add(light);
+    }
+  }
+  
+  buildObservationRoom() {
+    // Large observation room with glass
+    const roomSize = 15;
+    const wallHeight = 4;
+    const zPos = 25;
+    
+    // Floor
+    const floorGeo = new THREE.PlaneGeometry(roomSize, roomSize);
+    const floorMat = this.createPS1Material(this.floorTexture);
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, 0, zPos);
+    floor.receiveShadow = true;
+    this.game.scene.add(floor);
+    
+    // Ceiling
+    const ceilingGeo = new THREE.PlaneGeometry(roomSize, roomSize);
+    const ceilingMat = this.createPS1Material(this.ceilingTexture);
+    const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.set(0, wallHeight, zPos);
+    this.game.scene.add(ceiling);
+    
+    // Walls
+    const wallMat = this.createPS1Material(this.wallTexture);
+    
+    // Back wall with observation window
+    const backWall = new THREE.Mesh(
+      new THREE.BoxGeometry(roomSize, wallHeight, 0.3),
+      wallMat
+    );
+    backWall.position.set(0, wallHeight / 2, zPos + roomSize / 2);
+    backWall.castShadow = true;
+    this.game.scene.add(backWall);
+    
+    // Observation window (glass)
+    const glassMat = new THREE.MeshStandardMaterial({
+      color: 0x112233,
+      transparent: true,
+      opacity: 0.3,
+      metalness: 0.9,
+      roughness: 0.1
+    });
+    const window = new THREE.Mesh(
+      new THREE.PlaneGeometry(6, 3),
+      glassMat
+    );
+    window.position.set(0, 2, zPos + roomSize / 2 - 0.2);
+    this.game.scene.add(window);
+    
+    // Side walls
+    const leftWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, wallHeight, roomSize),
+      wallMat
+    );
+    leftWall.position.set(-roomSize / 2, wallHeight / 2, zPos);
+    leftWall.castShadow = true;
+    this.game.scene.add(leftWall);
+    
+    const rightWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, wallHeight, roomSize),
+      wallMat
+    );
+    rightWall.position.set(roomSize / 2, wallHeight / 2, zPos);
+    rightWall.castShadow = true;
+    this.game.scene.add(rightWall);
+    
+    // Room lights
+    const light = new THREE.PointLight(0xddeeff, 1.5, 12);
+    light.position.set(0, 3.5, zPos);
+    light.castShadow = true;
+    this.game.scene.add(light);
+  }
+  
+  buildServerRoom() {
+    // Server room with racks
+    const roomSize = 10;
+    const wallHeight = 4;
+    const zPos = 45;
+    
+    // Floor
+    const floorGeo = new THREE.PlaneGeometry(roomSize, roomSize);
+    const floorMat = this.createPS1Material(this.floorTexture);
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, 0, zPos);
+    floor.receiveShadow = true;
+    this.game.scene.add(floor);
+    
+    // Ceiling
+    const ceilingGeo = new THREE.PlaneGeometry(roomSize, roomSize);
+    const ceilingMat = this.createPS1Material(this.ceilingTexture);
+    const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.set(0, wallHeight, zPos);
+    this.game.scene.add(ceiling);
+    
+    // Walls
+    const wallMat = this.createPS1Material(this.wallTexture);
+    
+    const backWall = new THREE.Mesh(
+      new THREE.BoxGeometry(roomSize, wallHeight, 0.3),
+      wallMat
+    );
+    backWall.position.set(0, wallHeight / 2, zPos + roomSize / 2);
+    backWall.castShadow = true;
+    this.game.scene.add(backWall);
+    
+    const leftWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, wallHeight, roomSize),
+      wallMat
+    );
+    leftWall.position.set(-roomSize / 2, wallHeight / 2, zPos);
+    leftWall.castShadow = true;
+    this.game.scene.add(leftWall);
+    
+    const rightWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, wallHeight, roomSize),
+      wallMat
+    );
+    rightWall.position.set(roomSize / 2, wallHeight / 2, zPos);
+    rightWall.castShadow = true;
+    this.game.scene.add(rightWall);
+    
+    // Server racks
+    for (let i = 0; i < 4; i++) {
+      const rackGeo = new THREE.BoxGeometry(1, 3, 0.8);
+      const rackMat = new THREE.MeshStandardMaterial({ 
+        color: 0x1a1a1a, 
+        metalness: 0.8,
+        roughness: 0.3
+      });
+      const rack = new THREE.Mesh(rackGeo, rackMat);
+      rack.position.set(-3 + i * 2, 1.5, zPos + 2);
+      rack.castShadow = true;
+      this.game.scene.add(rack);
+      
+      // LED lights on racks
+      const ledMat = new THREE.MeshBasicMaterial({ color: 0x00ff41 });
+      for (let j = 0; j < 5; j++) {
+        const led = new THREE.Mesh(
+          new THREE.BoxGeometry(0.05, 0.05, 0.05),
+          ledMat
+        );
+        led.position.set(-3 + i * 2, 0.5 + j * 0.5, zPos + 1.6);
+        this.game.scene.add(led);
+      }
+    }
+    
+    // Room light
+    const light = new THREE.PointLight(0xddeeff, 1.2, 10);
+    light.position.set(0, 3.5, zPos);
+    this.game.scene.add(light);
+  }
+  
+  buildSecurityCheckpoint() {
+    // Security checkpoint with barriers
+    const roomSize = 8;
+    const wallHeight = 4;
+    const zPos = 60;
+    
+    // Floor
+    const floorGeo = new THREE.PlaneGeometry(roomSize, roomSize);
+    const floorMat = this.createPS1Material(this.floorTexture);
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, 0, zPos);
+    floor.receiveShadow = true;
+    this.game.scene.add(floor);
+    
+    // Ceiling
+    const ceilingGeo = new THREE.PlaneGeometry(roomSize, roomSize);
+    const ceilingMat = this.createPS1Material(this.ceilingTexture);
+    const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.set(0, wallHeight, zPos);
+    this.game.scene.add(ceiling);
+    
+    // Walls
+    const wallMat = this.createPS1Material(this.wallTexture);
+    
+    const backWall = new THREE.Mesh(
+      new THREE.BoxGeometry(roomSize, wallHeight, 0.3),
+      wallMat
+    );
+    backWall.position.set(0, wallHeight / 2, zPos + roomSize / 2);
+    backWall.castShadow = true;
+    this.game.scene.add(backWall);
+    
+    const leftWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, wallHeight, roomSize),
+      wallMat
+    );
+    leftWall.position.set(-roomSize / 2, wallHeight / 2, zPos);
+    leftWall.castShadow = true;
+    this.game.scene.add(leftWall);
+    
+    const rightWall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, wallHeight, roomSize),
+      wallMat
+    );
+    rightWall.position.set(roomSize / 2, wallHeight / 2, zPos);
+    rightWall.castShadow = true;
+    this.game.scene.add(rightWall);
+    
+    // Security barriers
+    const barrierGeo = new THREE.BoxGeometry(0.2, 1.5, 3);
+    const barrierMat = new THREE.MeshStandardMaterial({ 
+      color: 0xff8800,
+      emissive: 0xff4400,
+      emissiveIntensity: 0.3
+    });
+    
+    const barrier1 = new THREE.Mesh(barrierGeo, barrierMat);
+    barrier1.position.set(-2, 0.75, zPos);
+    this.game.scene.add(barrier1);
+    
+    const barrier2 = new THREE.Mesh(barrierGeo, barrierMat);
+    barrier2.position.set(2, 0.75, zPos);
+    this.game.scene.add(barrier2);
+    
+    // Emergency light
+    const emergencyLight = new THREE.PointLight(0xff4400, 1, 8);
+    emergencyLight.position.set(0, 3, zPos);
+    this.game.scene.add(emergencyLight);
+  }
+  
+  addLabInteractables() {
+    // Weapon pickup in observation room
+    const weaponGeo = new THREE.BoxGeometry(0.3, 0.1, 0.5);
+    const weaponMat = new THREE.MeshStandardMaterial({ 
+      color: 0x222222,
+      metalness: 0.9,
+      roughness: 0.2,
+      emissive: 0x00aaff,
+      emissiveIntensity: 0.2
+    });
+    const weapon = new THREE.Mesh(weaponGeo, weaponMat);
+    weapon.position.set(5, 1, 25);
+    weapon.userData.interactable = true;
+    weapon.userData.onInteract = (game) => {
+      game.player.hasWeapon = true;
+      game.player.ammo = 12;
+      game.player.reserveAmmo = 48;
+      game.scene.remove(weapon);
+      
+      if (window.gameState) {
+        window.gameState.hasWeapon = true;
+        window.gameState.showWeaponInfo = true;
+      }
+    };
+    this.game.scene.add(weapon);
+  }
+  
   createTextures() {
     // Create procedural horror textures
     this.wallTexture = this.createHorrorTexture('wall');

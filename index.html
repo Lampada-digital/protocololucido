@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>THE LUCID PROTOCOL</title>
-  <meta name="description" content="Somnus Dynamics Neural Interface - Protocol 12" />
+  <meta name="description" content="Somnus Dynamics - Protocol 12 - Interval 01: Disconnection" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
@@ -17,82 +17,52 @@
   <div id="game-container">
     <canvas id="game-canvas"></canvas>
     <div id="react-root"></div>
+    
+    <!-- Minimalist Crosshair -->
     <div id="crosshair"></div>
     
-    <!-- Blood vignette overlay -->
+    <!-- Blood vignette (health indicator) -->
     <div id="blood-vignette"></div>
     
-    <!-- Film grain overlay -->
+    <!-- Film grain -->
     <div id="film-grain"></div>
     
-    <!-- Scanline overlay -->
-    <div id="scanlines"></div>
-    
-    <!-- Chromatic aberration overlay -->
+    <!-- Chromatic aberration (NRL effect) -->
     <div id="chromatic-aberration"></div>
-    
-    <!-- Jump scare flash -->
-    <div id="jumpscare-flash"></div>
-    
-    <!-- Otherworld transition -->
-    <div id="otherworld-transition"></div>
     
     <!-- Cinematic Opening -->
     <div id="cinematic-opening">
-      <div id="cinematic-content">
-        <div id="cinematic-text"></div>
-      </div>
+      <div id="cinematic-text"></div>
+      <div id="cinematic-subtitle"></div>
     </div>
     
-    <!-- Start Screen -->
+    <!-- Diegetic UI Elements -->
+    <div id="diegetic-ui">
+      <div id="weapon-info"></div>
+      <div id="objective-marker"></div>
+    </div>
+    
+    <!-- Start Screen (Somnus Terminal) -->
     <div id="start-screen">
-      <div class="start-content">
-        <div class="somnus-logo">
-          <div class="somnus-icon">◈</div>
-          <div class="somnus-text">SOMNUS DYNAMICS</div>
-          <div class="somnus-sub">NEURAL INTERFACE SYSTEMS</div>
+      <div class="terminal-content">
+        <div class="terminal-header">
+          <div class="somnus-logo">◈ SOMNUS DYNAMICS</div>
+          <div class="terminal-id">NEURAL INTERFACE DIVISION // TERMINAL 034</div>
         </div>
         
-        <div class="title-divider"></div>
-        
-        <h1 class="horror-title glitch-text" data-text="THE LUCID PROTOCOL">THE LUCID PROTOCOL</h1>
-        <p class="protocol-id">PROTOCOL 12 // COGNITIVE CONVERGENCE</p>
-        
-        <div class="subject-info">
-          <div class="info-row"><span>SUBJECT:</span> <span>DANIEL VALE // 034</span></div>
-          <div class="info-row"><span>STATUS:</span> <span style="color: #ff4444;">NEURAL INSTABILITY DETECTED</span></div>
-          <div class="info-row"><span>SESSION:</span> <span>INTERVAL 01 — DISCONNECTION</span></div>
+        <div class="terminal-body">
+          <div class="terminal-line">> LUCID SYSTEM v4.7.2</div>
+          <div class="terminal-line">> PROTOCOL 12 ACTIVE</div>
+          <div class="terminal-line">> SUBJECT: DANIEL VALE // 034</div>
+          <div class="terminal-line">> INTERVAL: 01 — DISCONNECTION</div>
+          <div class="terminal-line warning">> WARNING: COGNITIVE INSTABILITY DETECTED</div>
+          <div class="terminal-line">> NRL: <span id="nrl-display">12%</span></div>
+          <div class="terminal-line">> STATUS: <span class="status-active">RECONSTRUCTING MEMORY</span></div>
         </div>
         
-        <button id="start-button">
-          <span class="btn-text">INITIATE LUCID SESSION</span>
-          <span class="btn-glitch"></span>
-        </button>
-        
-        <div class="warning-text">
-          <p>⚠ NEURAL INTERFACE ACTIVE ⚠</p>
-          <p class="small">This simulation reconstructs neural patterns. Perceptual anomalies may occur.</p>
-        </div>
-        
-        <div class="controls-info">
-          <div class="control-group">
-            <span class="key">W A S D</span> <span class="desc">Move</span>
-          </div>
-          <div class="control-group">
-            <span class="key">MOUSE</span> <span class="desc">Look</span>
-          </div>
-          <div class="control-group">
-            <span class="key">CLICK</span> <span class="desc">Fire</span>
-          </div>
-          <div class="control-group">
-            <span class="key">F</span> <span class="desc">Flashlight</span>
-          </div>
-          <div class="control-group">
-            <span class="key">R</span> <span class="desc">Reload</span>
-          </div>
-          <div class="control-group">
-            <span class="key">SHIFT</span> <span class="desc">Sprint</span>
-          </div>
+        <div class="terminal-footer">
+          <button id="start-button">INITIATE SESSION</button>
+          <div class="terminal-note">Press any key to continue</div>
         </div>
       </div>
     </div>
@@ -101,10 +71,9 @@
     <div id="death-screen" style="display:none;">
       <div class="death-content">
         <div class="death-icon">◈</div>
-        <h1 class="death-title">NEURAL COLLAPSE</h1>
-        <p class="death-subtitle">Subject 034 — Cognitive coherence lost</p>
-        <p class="death-detail">The protocol has rejected your neural pattern.</p>
-        <button id="respawn-button">REINITIALIZE SESSION</button>
+        <div class="death-title">NEURAL COLLAPSE</div>
+        <div class="death-subtitle">Subject 034 — Cognitive coherence lost</div>
+        <button id="respawn-button">REINITIALIZE</button>
       </div>
     </div>
   </div>
