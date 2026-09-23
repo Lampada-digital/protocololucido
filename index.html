@@ -10,37 +10,17 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
   <style>
     html, body { margin: 0; padding: 0; width: 100%; min-height: 100vh; background: #000; overflow: hidden; }
-    #root { min-height: 100vh; }
   </style>
 </head>
 <body>
   <div id="game-container">
     <canvas id="game-canvas"></canvas>
-    <div id="react-root"></div>
     
     <!-- Minimalist Crosshair -->
     <div id="crosshair"></div>
     
-    <!-- Blood vignette (health indicator) -->
-    <div id="blood-vignette"></div>
-    
     <!-- Film grain -->
     <div id="film-grain"></div>
-    
-    <!-- Chromatic aberration (NRL effect) -->
-    <div id="chromatic-aberration"></div>
-    
-    <!-- Cinematic Opening -->
-    <div id="cinematic-opening">
-      <div id="cinematic-text"></div>
-      <div id="cinematic-subtitle"></div>
-    </div>
-    
-    <!-- Diegetic UI Elements -->
-    <div id="diegetic-ui">
-      <div id="weapon-info"></div>
-      <div id="objective-marker"></div>
-    </div>
     
     <!-- Start Screen (Somnus Terminal) -->
     <div id="start-screen">
@@ -64,16 +44,6 @@
           <button id="start-button">INITIATE SESSION</button>
           <div class="terminal-note">Press any key to continue</div>
         </div>
-      </div>
-    </div>
-    
-    <!-- Death Screen -->
-    <div id="death-screen" style="display:none;">
-      <div class="death-content">
-        <div class="death-icon">◈</div>
-        <div class="death-title">NEURAL COLLAPSE</div>
-        <div class="death-subtitle">Subject 034 — Cognitive coherence lost</div>
-        <button id="respawn-button">REINITIALIZE</button>
       </div>
     </div>
   </div>
