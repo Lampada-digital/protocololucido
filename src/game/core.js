@@ -2,40 +2,54 @@ import * as THREE from 'three';
 import { Player } from './player.js';
 import { SanitySystem } from './sanitySystem.js';
 import { AudioSystem } from './audioSystem.js';
+import { EnemyAI } from './enemyAI.js';
+import { InventorySystem } from './inventory.js';
+import { HallucinationSystem } from './hallucinations.js';
+import { EnvironmentBuilder } from './environment.js';
 
-// PS1-style vertex shader with vertex snapping
+// PS1-style shaders with enhanced horror effects
 const ps1VertexShader = `
   uniform float u_snapResolution;
   uniform float u_jitterIntensity;
   uniform float u_time;
+  uniform float u_otherworldIntensity;
   
   varying vec2 vUv;
   varying vec3 vNormal;
+  varying vec3 vWorldPos;
   varying float vFogDepth;
   
   void main() {
     vUv = uv;
     vNormal = normalize(normalMatrix * normal);
     
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldPos = worldPos.xyz;
+    
+    vec4 mvPosition = viewMatrix * worldPos;
     vFogDepth = -mvPosition.z;
     
     vec4 projected = projectionMatrix * mvPosition;
     
-    // Vertex snapping (PS1 had no sub-pixel precision)
+    // Vertex snapping (PS1 style)
     float snap = u_snapResolution;
     projected.xyz = floor(projected.xyz * snap / projected.w) * projected.w / snap;
     
     // Sanity-based vertex jitter
-    float jitter = u_jitterIntensity * 0.015;
+    float jitter = u_jitterIntensity * 0.02;
     projected.x += sin(u_time * 12.0 + position.y * 5.0) * jitter;
     projected.y += cos(u_time * 9.0 + position.x * 4.0) * jitter;
+    
+    // Otherworld distortion
+    if (u_otherworldIntensity > 0.0) {
+      projected.x += sin(u_time * 3.0 + position.x * 2.0) * u_otherworldIntensity * 0.05;
+      projected.y += cos(u_time * 2.5 + position.z * 2.0) * u_otherworldIntensity * 0.05;
+    }
     
     gl_Position = projected;
   }
 `;
 
-// PS1-style fragment shader with affine texturing and dithering
 const ps1FragmentShader = `
   uniform sampler2D u_texture;
   uniform float u_time;
@@ -45,12 +59,16 @@ const ps1FragmentShader = `
   uniform vec3 u_fogColor;
   uniform float u_fogNear;
   uniform float u_fogFar;
+  uniform float u_otherworldIntensity;
+  uniform vec3 u_flashlightDir;
+  uniform vec3 u_flashlightPos;
+  uniform float u_flashlightIntensity;
   
   varying vec2 vUv;
   varying vec3 vNormal;
+  varying vec3 vWorldPos;
   varying float vFogDepth;
   
-  // 4x4 Bayer dithering matrix
   const mat4 bayerMatrix = mat4(
      0.0/16.0,  8.0/16.0,  2.0/16.0, 10.0/16.0,
     12.0/16.0,  4.0/16.0, 14.0/16.0,  6.0/16.0,
@@ -59,9 +77,9 @@ const ps1FragmentShader = `
   );
   
   void main() {
-    // Affine texture mapping (no perspective correction)
+    // Affine texture mapping
     vec2 uv = vUv;
-    float swim = u_textureSwim * 0.008;
+    float swim = u_textureSwim * 0.01;
     uv.x += sin(u_time * 2.0 + vUv.y * 3.0) * swim;
     uv.y += cos(u_time * 1.5 + vUv.x * 2.0) * swim;
     
@@ -71,13 +89,26 @@ const ps1FragmentShader = `
     
     vec4 texColor = texture2D(u_texture, uv);
     
-    // Simple directional lighting
+    // Lighting calculation
     vec3 lightDir = normalize(vec3(0.3, 1.0, 0.5));
     float diffuse = max(dot(vNormal, lightDir), 0.0);
-    float ambient = 0.12;
-    vec3 lit = texColor.rgb * (ambient + diffuse * 0.5);
+    float ambient = 0.15;
     
-    // Color quantization (15-bit color like PS1)
+    // Flashlight cone lighting
+    vec3 toFragment = vWorldPos - u_flashlightPos;
+    float dist = length(toFragment);
+    vec3 fragDir = normalize(toFragment);
+    float angle = dot(fragDir, u_flashlightDir);
+    
+    float flashlight = 0.0;
+    if (angle > 0.7 && dist < 20.0) { // 45-degree cone
+      flashlight = smoothstep(0.7, 0.9, angle) * (1.0 - dist / 20.0);
+      flashlight *= u_flashlightIntensity;
+    }
+    
+    vec3 lit = texColor.rgb * (ambient + diffuse * 0.4 + flashlight * 0.8);
+    
+    // Color quantization (15-bit color)
     float levels = 24.0;
     lit = floor(lit * levels) / levels;
     
@@ -85,14 +116,22 @@ const ps1FragmentShader = `
     lit.r += sin(u_time * 0.5) * u_colorShift * 0.15;
     lit.b += cos(u_time * 0.7) * u_colorShift * 0.1;
     
+    // Otherworld red tint
+    if (u_otherworldIntensity > 0.0) {
+      lit.r += u_otherworldIntensity * 0.3;
+      lit.g *= 1.0 - u_otherworldIntensity * 0.5;
+      lit.b *= 1.0 - u_otherworldIntensity * 0.5;
+    }
+    
     // Ordered dithering
     ivec2 pixel = ivec2(mod(gl_FragCoord.xy, 4.0));
     float threshold = bayerMatrix[pixel.x][pixel.y];
     float dither = (threshold - 0.5) * u_ditherStrength;
     lit += dither;
     
-    // Fog
-    float fogFactor = smoothstep(u_fogNear, u_fogFar, vFogDepth);
+    // Dense fog (Silent Hill style)
+    float fogFactor = 1.0 - exp(-vFogDepth * 0.05);
+    fogFactor = clamp(fogFactor, 0.0, 1.0);
     lit = mix(lit, u_fogColor, fogFactor);
     
     gl_FragColor = vec4(lit, texColor.a);
@@ -105,15 +144,35 @@ export class Game {
     this.camera = null;
     this.renderer = null;
     this.clock = new THREE.Clock();
+    
+    // Systems
     this.player = null;
     this.sanitySystem = null;
     this.audioSystem = null;
+    this.enemyAI = null;
+    this.inventorySystem = null;
+    this.hallucinationSystem = null;
+    this.environmentBuilder = null;
+    
+    // Game state
     this.enemies = [];
     this.hallucinations = [];
     this.ps1Materials = [];
     this.isRunning = false;
+    this.isOtherworld = false;
+    this.otherworldTransition = 0;
     
-    // PS1 shader uniforms (shared reference)
+    // Flashlight
+    this.flashlight = null;
+    this.flashlightBattery = 100;
+    this.flashlightOn = false;
+    
+    // Lighting
+    this.ambientLight = null;
+    this.emergencyLights = [];
+    this.flickeringLights = [];
+    
+    // PS1 shader uniforms
     this.ps1Uniforms = {
       u_snapResolution: { value: 150.0 },
       u_jitterIntensity: { value: 0.0 },
@@ -122,9 +181,13 @@ export class Game {
       u_textureSwim: { value: 0.0 },
       u_colorShift: { value: 0.0 },
       u_ditherStrength: { value: 0.04 },
-      u_fogColor: { value: new THREE.Color(0x050510) },
-      u_fogNear: { value: 8.0 },
-      u_fogFar: { value: 35.0 }
+      u_fogColor: { value: new THREE.Color(0x1a1a1a) },
+      u_fogNear: { value: 5.0 },
+      u_fogFar: { value: 25.0 },
+      u_otherworldIntensity: { value: 0.0 },
+      u_flashlightDir: { value: new THREE.Vector3(0, 0, -1) },
+      u_flashlightPos: { value: new THREE.Vector3(0, 0, 0) },
+      u_flashlightIntensity: { value: 0.0 }
     };
     
     this.init();
@@ -133,53 +196,50 @@ export class Game {
   init() {
     const canvas = document.getElementById('game-canvas');
     
-    // Renderer
+    // Renderer with horror-optimized settings
     this.renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: false, // PS1 had no AA
+      antialias: false,
       powerPreference: 'high-performance'
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-    this.renderer.shadowMap.enabled = false; // Performance
-    this.renderer.setClearColor(0x050510);
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.BasicShadowMap; // Performance
+    this.renderer.shadowMap.autoUpdate = false; // Manual updates
+    this.renderer.setClearColor(0x0a0a0a);
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 0.6; // Dark exposure
     
-    // Scene
+    // Scene with dense fog
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.Fog(0x050510, 8, 35);
+    this.scene.fog = new THREE.FogExp2(0x1a1a1a, 0.05); // Exponential fog
     
     // Camera
     this.camera = new THREE.PerspectiveCamera(
-      75,
+      70,
       window.innerWidth / window.innerHeight,
       0.1,
       100
     );
     
-    // Lighting (dim, horror atmosphere)
-    const ambientLight = new THREE.AmbientLight(0x222244, 0.3);
-    this.scene.add(ambientLight);
-    
-    const pointLight = new THREE.PointLight(0xff4444, 0.8, 15);
-    pointLight.position.set(0, 3, 0);
-    this.scene.add(pointLight);
-    this.mainLight = pointLight;
-    
-    // Secondary eerie light
-    const pointLight2 = new THREE.PointLight(0x4400ff, 0.4, 20);
-    pointLight2.position.set(-5, 2, -5);
-    this.scene.add(pointLight2);
+    // Lighting setup
+    this.setupLighting();
     
     // Build environment
-    this.buildEnvironment();
+    this.environmentBuilder = new EnvironmentBuilder(this);
+    this.environmentBuilder.build();
     
     // Initialize systems
     this.player = new Player(this.camera, this.scene, this);
     this.sanitySystem = new SanitySystem(this);
     this.audioSystem = new AudioSystem(this);
+    this.enemyAI = new EnemyAI(this);
+    this.inventorySystem = new InventorySystem(this);
+    this.hallucinationSystem = new HallucinationSystem(this);
     
     // Spawn initial enemies
-    this.spawnEnemies(3);
+    this.enemyAI.spawnInitialEnemies(3);
     
     // Event listeners
     window.addEventListener('resize', () => this.onResize());
@@ -192,329 +252,256 @@ export class Game {
     window.gameState = {
       sanity: 100,
       health: 100,
-      ammo: 30,
+      ammo: 12, // Start with limited ammo
       maxAmmo: 30,
+      battery: 100,
+      flashlightOn: false,
       enemyCount: this.enemies.length,
       isMicActive: false,
-      fearLevel: 0
+      fearLevel: 0,
+      isOtherworld: false,
+      objective: 'Find a way out'
     };
   }
   
-  buildEnvironment() {
-    // Create procedural textures
-    const wallTexture = this.createProceduralTexture('wall');
-    const floorTexture = this.createProceduralTexture('floor');
-    const ceilingTexture = this.createProceduralTexture('ceiling');
+  setupLighting() {
+    // Dim ambient light
+    this.ambientLight = new THREE.AmbientLight(0x222233, 0.2);
+    this.scene.add(this.ambientLight);
     
-    // Floor
-    const floorGeo = new THREE.PlaneGeometry(40, 40);
-    const floorMat = this.createPS1Material(floorTexture);
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    this.scene.add(floor);
+    // Flashlight (SpotLight)
+    this.flashlight = new THREE.SpotLight(0xffffee, 0, 20, Math.PI / 4, 0.5, 1);
+    this.flashlight.position.set(0, 0, 0);
+    this.flashlight.target.position.set(0, 0, -1);
+    this.flashlight.castShadow = true;
+    this.flashlight.shadow.mapSize.width = 512;
+    this.flashlight.shadow.mapSize.height = 512;
+    this.flashlight.shadow.camera.near = 0.5;
+    this.flashlight.shadow.camera.far = 20;
+    this.scene.add(this.flashlight);
+    this.scene.add(this.flashlight.target);
     
-    // Ceiling
-    const ceilingGeo = new THREE.PlaneGeometry(40, 40);
-    const ceilingMat = this.createPS1Material(ceilingTexture);
-    const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
-    ceiling.rotation.x = Math.PI / 2;
-    ceiling.position.y = 4;
-    this.scene.add(ceiling);
-    
-    // Walls (corridor-like environment)
-    const wallMat = this.createPS1Material(wallTexture);
-    
-    // Create maze-like corridors
-    const wallPositions = [
-      { pos: [0, 2, -20], size: [40, 4, 0.5], rot: [0, 0, 0] },
-      { pos: [0, 2, 20], size: [40, 4, 0.5], rot: [0, 0, 0] },
-      { pos: [-20, 2, 0], size: [0.5, 4, 40], rot: [0, 0, 0] },
-      { pos: [20, 2, 0], size: [0.5, 4, 40], rot: [0, 0, 0] },
-      // Internal walls for maze
-      { pos: [-8, 2, -5], size: [0.5, 4, 10], rot: [0, 0, 0] },
-      { pos: [8, 2, 5], size: [0.5, 4, 10], rot: [0, 0, 0] },
-      { pos: [0, 2, -10], size: [12, 4, 0.5], rot: [0, 0, 0] },
-      { pos: [-5, 2, 8], size: [10, 4, 0.5], rot: [0, 0, 0] },
-      { pos: [12, 2, -8], size: [0.5, 4, 8], rot: [0, 0, 0] },
-      { pos: [-12, 2, 12], size: [8, 4, 0.5], rot: [0, 0, 0] },
+    // Emergency red lights (pulsing)
+    const emergencyPositions = [
+      { x: -10, y: 3, z: -10 },
+      { x: 10, y: 3, z: 10 },
+      { x: -10, y: 3, z: 10 },
+      { x: 10, y: 3, z: -10 }
     ];
     
-    wallPositions.forEach(w => {
-      const geo = new THREE.BoxGeometry(w.size[0], w.size[1], w.size[2]);
-      const mesh = new THREE.Mesh(geo, wallMat.clone());
-      mesh.position.set(w.pos[0], w.pos[1], w.pos[2]);
-      mesh.rotation.set(w.rot[0], w.rot[1], w.rot[2]);
-      this.scene.add(mesh);
-      this.ps1Materials.push(mesh.material);
+    emergencyPositions.forEach(pos => {
+      const light = new THREE.PointLight(0xff0000, 0.5, 15);
+      light.position.set(pos.x, pos.y, pos.z);
+      this.scene.add(light);
+      this.emergencyLights.push({
+        light,
+        baseIntensity: 0.5,
+        phase: Math.random() * Math.PI * 2
+      });
     });
     
-    // Add some creepy props
-    this.addProps();
-  }
-  
-  addProps() {
-    // Pillars
-    const pillarGeo = new THREE.CylinderGeometry(0.3, 0.3, 4, 6); // Low-poly
-    const pillarMat = this.createPS1Material(this.createProceduralTexture('stone'));
-    
-    const pillarPositions = [
-      [-5, 2, -5], [5, 2, -5], [-5, 2, 5], [5, 2, 5],
-      [-15, 2, -15], [15, 2, -15], [-15, 2, 15], [15, 2, 15]
+    // Flickering fluorescent lights
+    const flickerPositions = [
+      { x: 0, y: 3.5, z: 0 },
+      { x: -5, y: 3.5, z: -5 },
+      { x: 5, y: 3.5, z: 5 }
     ];
     
-    pillarPositions.forEach(pos => {
-      const pillar = new THREE.Mesh(pillarGeo, pillarMat.clone());
-      pillar.position.set(pos[0], pos[1], pos[2]);
-      this.scene.add(pillar);
-      this.ps1Materials.push(pillar.material);
+    flickerPositions.forEach(pos => {
+      const light = new THREE.PointLight(0xccffcc, 0.8, 10);
+      light.position.set(pos.x, pos.y, pos.z);
+      light.castShadow = true;
+      light.shadow.mapSize.width = 256;
+      light.shadow.mapSize.height = 256;
+      this.scene.add(light);
+      this.flickeringLights.push({
+        light,
+        baseIntensity: 0.8,
+        nextFlicker: Date.now() + Math.random() * 5000
+      });
     });
   }
   
-  createProceduralTexture(type) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
-    const ctx = canvas.getContext('2d');
+  toggleFlashlight() {
+    this.flashlightOn = !this.flashlightOn;
     
-    switch (type) {
-      case 'wall':
-        ctx.fillStyle = '#1a1a2e';
-        ctx.fillRect(0, 0, 64, 64);
-        // Brick pattern
-        for (let y = 0; y < 64; y += 8) {
-          for (let x = 0; x < 64; x += 16) {
-            const offset = (y / 8) % 2 === 0 ? 0 : 8;
-            ctx.fillStyle = `rgb(${20 + Math.random() * 15}, ${15 + Math.random() * 10}, ${30 + Math.random() * 15})`;
-            ctx.fillRect(x + offset, y, 14, 6);
-          }
-        }
-        // Add grime
-        for (let i = 0; i < 50; i++) {
-          ctx.fillStyle = `rgba(0, 0, 0, ${Math.random() * 0.3})`;
-          ctx.fillRect(Math.random() * 64, Math.random() * 64, 2, 2);
-        }
-        break;
-        
-      case 'floor':
-        ctx.fillStyle = '#0d0d1a';
-        ctx.fillRect(0, 0, 64, 64);
-        // Tile pattern
-        for (let y = 0; y < 64; y += 16) {
-          for (let x = 0; x < 64; x += 16) {
-            ctx.fillStyle = `rgb(${10 + Math.random() * 8}, ${8 + Math.random() * 6}, ${15 + Math.random() * 10})`;
-            ctx.fillRect(x + 1, y + 1, 14, 14);
-          }
-        }
-        // Blood stains
-        for (let i = 0; i < 5; i++) {
-          ctx.fillStyle = `rgba(80, 0, 0, ${0.2 + Math.random() * 0.3})`;
-          ctx.beginPath();
-          ctx.arc(Math.random() * 64, Math.random() * 64, 2 + Math.random() * 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        break;
-        
-      case 'ceiling':
-        ctx.fillStyle = '#0a0a15';
-        ctx.fillRect(0, 0, 64, 64);
-        for (let i = 0; i < 100; i++) {
-          ctx.fillStyle = `rgba(${Math.random() * 20}, ${Math.random() * 10}, ${Math.random() * 30}, 0.5)`;
-          ctx.fillRect(Math.random() * 64, Math.random() * 64, 1 + Math.random() * 3, 1 + Math.random() * 3);
-        }
-        break;
-        
-      case 'stone':
-        ctx.fillStyle = '#1a1a25';
-        ctx.fillRect(0, 0, 64, 64);
-        for (let i = 0; i < 200; i++) {
-          const shade = 15 + Math.random() * 20;
-          ctx.fillStyle = `rgb(${shade}, ${shade - 3}, ${shade + 5})`;
-          ctx.fillRect(Math.random() * 64, Math.random() * 64, 1 + Math.random() * 2, 1 + Math.random() * 2);
-        }
-        break;
-    }
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.magFilter = THREE.NearestFilter; // PS1 nearest-neighbor
-    texture.minFilter = THREE.NearestFilter;
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(4, 4);
-    
-    this.ps1Uniforms.u_texture.value = texture;
-    
-    return texture;
-  }
-  
-  createPS1Material(texture) {
-    const material = new THREE.ShaderMaterial({
-      vertexShader: ps1VertexShader,
-      fragmentShader: ps1FragmentShader,
-      uniforms: {
-        u_snapResolution: { value: 150.0 },
-        u_jitterIntensity: { value: 0.0 },
-        u_time: { value: 0.0 },
-        u_texture: { value: texture },
-        u_textureSwim: { value: 0.0 },
-        u_colorShift: { value: 0.0 },
-        u_ditherStrength: { value: 0.04 },
-        u_fogColor: { value: new THREE.Color(0x050510) },
-        u_fogNear: { value: 8.0 },
-        u_fogFar: { value: 35.0 }
-      }
-    });
-    
-    this.ps1Materials.push(material);
-    return material;
-  }
-  
-  spawnEnemies(count) {
-    for (let i = 0; i < count; i++) {
-      this.spawnEnemy();
-    }
-  }
-  
-  spawnEnemy(position = null) {
-    // Low-poly nightmare creature
-    const bodyGeo = new THREE.ConeGeometry(0.4, 1.5, 5);
-    const headGeo = new THREE.SphereGeometry(0.3, 4, 4);
-    
-    const enemyMat = new THREE.MeshBasicMaterial({
-      color: 0x330011,
-      wireframe: false
-    });
-    
-    const body = new THREE.Mesh(bodyGeo, enemyMat);
-    const head = new THREE.Mesh(headGeo, enemyMat.clone());
-    head.position.y = 1.0;
-    
-    const enemy = new THREE.Group();
-    enemy.add(body);
-    enemy.add(head);
-    
-    // Position
-    if (position) {
-      enemy.position.copy(position);
+    if (this.flashlightOn && this.flashlightBattery > 0) {
+      this.flashlight.intensity = 2;
+      this.ps1Uniforms.u_flashlightIntensity.value = 1.0;
     } else {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 10 + Math.random() * 10;
-      enemy.position.set(
-        Math.cos(angle) * dist,
-        0.75,
-        Math.sin(angle) * dist
-      );
+      this.flashlight.intensity = 0;
+      this.ps1Uniforms.u_flashlightIntensity.value = 0.0;
+      this.flashlightOn = false;
     }
-    
-    enemy.userData = {
-      speed: 0.01 + Math.random() * 0.015,
-      health: 3,
-      isHallucination: false,
-      wanderAngle: Math.random() * Math.PI * 2,
-      wanderTimer: 0
-    };
-    
-    this.scene.add(enemy);
-    this.enemies.push(enemy);
     
     if (window.gameState) {
-      window.gameState.enemyCount = this.enemies.length;
+      window.gameState.flashlightOn = this.flashlightOn;
     }
-    
-    return enemy;
   }
   
-  spawnHallucination(position) {
-    const hallucination = this.spawnEnemy(position);
-    hallucination.userData.isHallucination = true;
-    hallucination.userData.lifetime = 5000 + Math.random() * 5000;
-    hallucination.userData.spawnTime = Date.now();
-    
-    // Make it flicker
-    hallucination.traverse(child => {
-      if (child.isMesh) {
-        child.material = child.material.clone();
-        child.material.transparent = true;
+  updateFlashlight(delta) {
+    if (this.flashlightOn) {
+      // Drain battery
+      this.flashlightBattery = Math.max(0, this.flashlightBattery - delta * 2);
+      
+      if (this.flashlightBattery <= 0) {
+        this.toggleFlashlight();
       }
+      
+      // Update flashlight position and direction
+      const playerPos = this.player.getPosition();
+      const playerRot = this.player.getRotation();
+      
+      this.flashlight.position.copy(playerPos);
+      
+      const direction = new THREE.Vector3(0, 0, -1);
+      direction.applyEuler(new THREE.Euler(playerRot.x, playerRot.y, 0, 'YXZ'));
+      
+      this.flashlight.target.position.copy(playerPos).add(direction);
+      
+      // Update shader uniforms
+      this.ps1Uniforms.u_flashlightPos.value.copy(playerPos);
+      this.ps1Uniforms.u_flashlightDir.value.copy(direction);
+      
+      // Flicker when battery low
+      if (this.flashlightBattery < 20) {
+        const flicker = Math.random() > 0.9 ? 0.5 : 1.0;
+        this.flashlight.intensity = 2 * flicker;
+        this.ps1Uniforms.u_flashlightIntensity.value = flicker;
+      }
+    }
+    
+    if (window.gameState) {
+      window.gameState.battery = this.flashlightBattery;
+    }
+  }
+  
+  updateLighting(delta) {
+    // Update emergency lights (pulsing)
+    this.emergencyLights.forEach(emergency => {
+      emergency.phase += delta * 2;
+      emergency.light.intensity = emergency.baseIntensity * (0.5 + Math.sin(emergency.phase) * 0.5);
     });
     
-    this.hallucinations.push(hallucination);
-    return hallucination;
+    // Update flickering lights
+    const now = Date.now();
+    this.flickeringLights.forEach(flicker => {
+      if (now > flicker.nextFlicker) {
+        // Random flicker
+        const shouldFlicker = Math.random() > 0.7;
+        if (shouldFlicker) {
+          flicker.light.intensity = Math.random() * 0.3;
+          flicker.nextFlicker = now + 50 + Math.random() * 100;
+        } else {
+          flicker.light.intensity = flicker.baseIntensity;
+          flicker.nextFlicker = now + 2000 + Math.random() * 5000;
+        }
+      }
+    });
   }
   
-  removeEnemy(enemy) {
-    const idx = this.enemies.indexOf(enemy);
-    if (idx >= 0) this.enemies.splice(idx, 1);
+  updateOtherworld(delta) {
+    const sanity = this.sanitySystem.getEffectiveSanity();
     
-    const hIdx = this.hallucinations.indexOf(enemy);
-    if (hIdx >= 0) this.hallucinations.splice(hIdx, 1);
+    // Transition triggers at sanity thresholds
+    let targetIntensity = 0;
+    if (sanity < 75) targetIntensity = 0.3;
+    if (sanity < 50) targetIntensity = 0.6;
+    if (sanity < 25) targetIntensity = 1.0;
     
-    this.scene.remove(enemy);
+    // Smooth transition
+    this.otherworldTransition += (targetIntensity - this.otherworldTransition) * delta * 2;
+    
+    // Update shader
+    this.ps1Uniforms.u_otherworldIntensity.value = this.otherworldTransition;
+    
+    // Update fog color based on otherworld state
+    const normalFog = new THREE.Color(0x1a1a1a);
+    const otherworldFog = new THREE.Color(0x2d1f1f);
+    this.scene.fog.color.lerpColors(normalFog, otherworldFog, this.otherworldTransition);
+    this.ps1Uniforms.u_fogColor.value.copy(this.scene.fog.color);
+    
+    // Update ambient light
+    this.ambientLight.color.lerpColors(
+      new THREE.Color(0x222233),
+      new THREE.Color(0x331111),
+      this.otherworldTransition
+    );
+    
+    // Trigger transition effect at thresholds
+    if (this.otherworldTransition > 0.5 && !this.isOtherworld) {
+      this.isOtherworld = true;
+      this.triggerOtherworldTransition();
+    } else if (this.otherworldTransition < 0.3 && this.isOtherworld) {
+      this.isOtherworld = false;
+    }
     
     if (window.gameState) {
-      window.gameState.enemyCount = this.enemies.length;
+      window.gameState.isOtherworld = this.isOtherworld;
     }
   }
   
-  updateEnemies(delta) {
-    const playerPos = this.camera.position;
+  triggerOtherworldTransition() {
+    // Visual effect
+    const transition = document.getElementById('otherworld-transition');
+    transition.style.opacity = '1';
+    setTimeout(() => {
+      transition.style.opacity = '0';
+    }, 500);
     
-    this.enemies.forEach(enemy => {
-      const dist = enemy.position.distanceTo(playerPos);
-      
-      // Hallucination lifetime
-      if (enemy.userData.isHallucination) {
-        const age = Date.now() - enemy.userData.spawnTime;
-        if (age > enemy.userData.lifetime) {
-          this.removeEnemy(enemy);
-          return;
-        }
-        // Flicker effect
-        const flicker = Math.sin(age * 0.01) * 0.3 + 0.7;
-        enemy.traverse(child => {
-          if (child.isMesh) {
-            child.material.opacity = flicker;
-          }
-        });
-      }
-      
-      // Movement AI
-      if (dist < 20) {
-        // Chase player if close
-        const dir = new THREE.Vector3()
-          .subVectors(playerPos, enemy.position)
-          .normalize();
-        dir.y = 0;
+    // Audio effect (siren)
+    if (this.audioSystem) {
+      this.audioSystem.playSiren();
+    }
+    
+    // Screen shake
+    this.cameraShake(0.2, 1000);
+    
+    // Spawn more aggressive enemies
+    this.enemyAI.spawnInitialEnemies(2);
+  }
+  
+  cameraShake(intensity, duration) {
+    const startTime = Date.now();
+    const originalPos = this.camera.position.clone();
+    
+    const shake = () => {
+      const elapsed = Date.now() - startTime;
+      if (elapsed < duration) {
+        const progress = elapsed / duration;
+        const shakeIntensity = intensity * (1 - progress);
         
-        enemy.position.add(dir.multiplyScalar(enemy.userData.speed * delta * 60));
-        enemy.lookAt(playerPos.x, enemy.position.y, playerPos.z);
+        this.camera.position.x = originalPos.x + (Math.random() - 0.5) * shakeIntensity;
+        this.camera.position.y = originalPos.y + (Math.random() - 0.5) * shakeIntensity;
+        
+        requestAnimationFrame(shake);
       } else {
-        // Wander
-        enemy.userData.wanderTimer += delta;
-        if (enemy.userData.wanderTimer > 2 + Math.random() * 3) {
-          enemy.userData.wanderAngle += (Math.random() - 0.5) * 2;
-          enemy.userData.wanderTimer = 0;
-        }
-        
-        const wanderDir = new THREE.Vector3(
-          Math.cos(enemy.userData.wanderAngle),
-          0,
-          Math.sin(enemy.userData.wanderAngle)
-        );
-        enemy.position.add(wanderDir.multiplyScalar(enemy.userData.speed * 0.5 * delta * 60));
+        this.camera.position.copy(originalPos);
       }
-      
-      // Keep in bounds
-      enemy.position.x = Math.max(-19, Math.min(19, enemy.position.x));
-      enemy.position.z = Math.max(-19, Math.min(19, enemy.position.z));
-      
-      // Proximity sanity drain
-      if (dist < 5) {
-        this.sanitySystem.addProximityDrain(1 - dist / 5);
-      }
-      
-      // Bobbing animation
-      enemy.position.y = 0.75 + Math.sin(Date.now() * 0.003 + enemy.id) * 0.1;
-    });
+    };
+    shake();
+  }
+  
+  updatePostProcessing(sanityEffects) {
+    // Blood vignette (increases with low health/sanity)
+    const bloodVignette = document.getElementById('blood-vignette');
+    const vignetteIntensity = Math.max(
+      sanityEffects.vignette,
+      1 - (this.player.health / 100)
+    );
+    bloodVignette.style.opacity = vignetteIntensity * 0.8;
+    
+    // Chromatic aberration (when sanity < 40%)
+    const chromatic = document.getElementById('chromatic-aberration');
+    if (sanityEffects.chromatic > 0.3) {
+      chromatic.style.opacity = sanityEffects.chromatic * 0.5;
+    } else {
+      chromatic.style.opacity = '0';
+    }
+    
+    // Film grain (always present, increases with low sanity)
+    const grain = document.getElementById('film-grain');
+    grain.style.opacity = 0.15 + sanityEffects.colorShift * 0.2;
   }
   
   updatePS1Effects(sanityEffects) {
@@ -526,18 +513,6 @@ export class Game {
         mat.uniforms.u_time.value = this.clock.elapsedTime;
       }
     });
-    
-    // Update fog based on sanity
-    const fogDensity = 1 - (sanityEffects.vignette * 0.5);
-    this.scene.fog.far = 35 * fogDensity;
-    
-    // Main light flickers with low sanity
-    if (this.mainLight) {
-      const flicker = sanityEffects.vignette > 0.3 
-        ? 0.5 + Math.random() * 0.5 
-        : 0.8;
-      this.mainLight.intensity = flicker;
-    }
   }
   
   animate() {
@@ -550,11 +525,16 @@ export class Game {
     // Update systems
     this.player.update(delta);
     this.sanitySystem.update(delta);
-    this.updateEnemies(delta);
+    this.enemyAI.update(delta);
+    this.hallucinationSystem.update(delta);
+    this.updateFlashlight(delta);
+    this.updateLighting(delta);
+    this.updateOtherworld(delta);
     
-    // Update PS1 shader effects based on sanity
+    // Update PS1 shader effects
     const sanityEffects = this.sanitySystem.getEffects();
     this.updatePS1Effects(sanityEffects);
+    this.updatePostProcessing(sanityEffects);
     
     // Update React HUD state
     if (window.gameState) {
@@ -563,8 +543,8 @@ export class Game {
       window.gameState.ammo = this.player.ammo;
       window.gameState.fearLevel = this.audioSystem.getFearLevel();
       window.gameState.isMicActive = this.audioSystem.isActive;
+      window.gameState.enemyCount = this.enemies.length;
       
-      // Dispatch event for React
       window.dispatchEvent(new CustomEvent('gameStateUpdate', {
         detail: { ...window.gameState }
       }));
@@ -580,79 +560,56 @@ export class Game {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
   
-  // Called by player when shooting
   onShoot(raycaster) {
     const intersects = raycaster.intersectObjects(
-      this.enemies.map(e => e.children).flat(),
-      false
+      this.enemies.map(e => e.mesh).filter(m => m),
+      true
     );
     
     if (intersects.length > 0) {
       const hit = intersects[0].object;
-      const enemy = hit.parent;
       
-      if (enemy && enemy.userData) {
-        enemy.userData.health--;
-        
-        // Flash red
-        enemy.traverse(child => {
-          if (child.isMesh) {
-            const origColor = child.material.color.clone();
-            child.material.color.set(0xff0000);
-            setTimeout(() => {
-              if (child.material) child.material.color.copy(origColor);
-            }, 100);
-          }
+      // Find enemy that owns this mesh
+      const enemy = this.enemies.find(e => {
+        if (e.mesh === hit) return true;
+        let found = false;
+        e.mesh.traverse(child => {
+          if (child === hit) found = true;
         });
+        return found;
+      });
+      
+      if (enemy) {
+        enemy.takeDamage(1);
         
-        if (enemy.userData.health <= 0) {
-          this.removeEnemy(enemy);
-          
-          // Spawn new enemy after delay
-          setTimeout(() => {
-            if (this.isRunning) this.spawnEnemy();
-          }, 5000 + Math.random() * 10000);
+        if (enemy.health <= 0) {
+          this.enemyAI.removeEnemy(enemy);
         }
       }
     }
   }
   
-  // Called by audio system on scream
   onScream(intensity) {
     this.sanitySystem.onFearSpike(intensity);
-    
-    // Spawn enemy near player
-    const playerPos = this.camera.position.clone();
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 5 + Math.random() * 5;
-    const spawnPos = new THREE.Vector3(
-      playerPos.x + Math.cos(angle) * dist,
-      0.75,
-      playerPos.z + Math.sin(angle) * dist
-    );
-    
-    // Keep in bounds
-    spawnPos.x = Math.max(-18, Math.min(18, spawnPos.x));
-    spawnPos.z = Math.max(-18, Math.min(18, spawnPos.z));
-    
-    this.spawnEnemy(spawnPos);
+    this.enemyAI.spawnEnemyNearPlayer();
   }
   
-  // Trigger a hallucination (from server or local)
   triggerHallucination(type, intensity) {
-    const playerPos = this.camera.position.clone();
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 3 + Math.random() * 6;
-    const pos = new THREE.Vector3(
-      playerPos.x + Math.cos(angle) * dist,
-      0.75,
-      playerPos.z + Math.sin(angle) * dist
-    );
+    this.hallucinationSystem.spawnHallucination(type, intensity);
+  }
+  
+  triggerJumpScare() {
+    const flash = document.getElementById('jumpscare-flash');
+    flash.style.opacity = '1';
+    setTimeout(() => {
+      flash.style.opacity = '0';
+    }, 100);
     
-    pos.x = Math.max(-18, Math.min(18, pos.x));
-    pos.z = Math.max(-18, Math.min(18, pos.z));
+    this.cameraShake(0.3, 500);
     
-    this.spawnHallucination(pos);
+    if (this.audioSystem) {
+      this.audioSystem.playJumpScare();
+    }
   }
 }
 

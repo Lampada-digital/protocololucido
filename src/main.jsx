@@ -14,6 +14,7 @@ function startGame() {
 
   if (!gameInstance) {
     gameInstance = initGame();
+    window.game = gameInstance; // Expose for inventory clicks
   }
   
   const canvas = document.getElementById('game-canvas');
