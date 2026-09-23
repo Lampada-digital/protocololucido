@@ -1,5 +1,3 @@
-import * as THREE from 'three';
-
 /**
  * AdvancedAudio - Spatial audio system for horror atmosphere
  * Features:
