@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import { Player } from './player.js';
+import { CinematicCamera } from '../core/CinematicCamera.js';
 import { SanitySystem } from './sanitySystem.js';
-import { AudioSystem } from './audioSystem.js';
+import { AdvancedAudio } from '../systems/AdvancedAudio.js';
+import { NarrativeEngine } from '../systems/NarrativeEngine.js';
 import { EnemyAI } from './enemyAI.js';
 import { InventorySystem } from './inventory.js';
 import { HallucinationSystem } from './hallucinations.js';
@@ -231,9 +232,10 @@ export class Game {
     this.environmentBuilder.build();
     
     // Initialize systems
-    this.player = new Player(this.camera, this.scene, this);
+    this.player = new CinematicCamera(this.camera, this.scene, this);
     this.sanitySystem = new SanitySystem(this);
-    this.audioSystem = new AudioSystem(this);
+    this.audioSystem = new AdvancedAudio(this);
+    this.narrativeEngine = new NarrativeEngine(this);
     this.enemyAI = new EnemyAI(this);
     this.inventorySystem = new InventorySystem(this);
     this.hallucinationSystem = new HallucinationSystem(this);
@@ -525,9 +527,10 @@ export class Game {
     // Update systems
     this.player.update(delta);
     this.sanitySystem.update(delta);
+    this.narrativeEngine.update(delta);
+    this.audioSystem.update(delta);
     this.enemyAI.update(delta);
     this.hallucinationSystem.update(delta);
-    this.updateFlashlight(delta);
     this.updateLighting(delta);
     this.updateOtherworld(delta);
     
@@ -592,6 +595,14 @@ export class Game {
   onScream(intensity) {
     this.sanitySystem.onFearSpike(intensity);
     this.enemyAI.spawnEnemyNearPlayer();
+    
+    // Trigger narrative response to fear
+    if (this.narrativeEngine) {
+      const sanity = this.sanitySystem.getEffectiveSanity();
+      if (sanity < 25 && !this.narrativeEngine.eventTriggers.get('low_sanity_25').triggered) {
+        this.narrativeEngine.triggerEvent('low_sanity_25');
+      }
+    }
   }
   
   triggerHallucination(type, intensity) {
