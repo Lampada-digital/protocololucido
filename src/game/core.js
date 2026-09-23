@@ -232,9 +232,9 @@ export class Game {
     // Lighting setup
     this.setupLighting();
     
-    // Build environment
+    // Build environment - Laboratory facility
     this.environmentBuilder = new EnvironmentBuilder(this);
-    this.environmentBuilder.build();
+    this.environmentBuilder.buildLaboratory();
     
     // Initialize systems
     this.player = new CinematicCamera(this.camera, this.scene, this);
@@ -268,11 +268,13 @@ export class Game {
       reserveAmmo: 48, // Reserve ammunition
       battery: 100,
       flashlightOn: true, // Start with flashlight ON
+      hasWeapon: false, // Weapon not picked up yet
+      showWeaponInfo: false, // Show weapon info briefly
       enemyCount: this.enemies.length,
       isMicActive: false,
       fearLevel: 0,
       isOtherworld: false,
-      objective: 'Explore the facility',
+      objective: 'Find a way out',
       isInvulnerable: true // Protection during initialization
     };
     
@@ -598,6 +600,8 @@ export class Game {
       window.gameState.maxAmmo = Number.isFinite(this.player?.maxAmmo) ? this.player.maxAmmo : 30;
       window.gameState.battery = Number.isFinite(this.flashlightBattery) ? this.flashlightBattery : 100;
       window.gameState.flashlightOn = this.player?.flashlightOn ?? true;
+      window.gameState.hasWeapon = this.player?.hasWeapon ?? false;
+      window.gameState.showWeaponInfo = this.player?.showWeaponInfo ?? false;
       window.gameState.fearLevel = this.audioSystem ? this.audioSystem.getFearLevel() : 0;
       window.gameState.isMicActive = this.audioSystem ? this.audioSystem.isActive : false;
       window.gameState.enemyCount = this.enemies.length;

@@ -1,21 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import HUD from './HUD.jsx';
+import CinematicOpening from './CinematicOpening.jsx';
 
 export default function App() {
+  const [gameStarted, setGameStarted] = useState(false);
+  const [showCinematic, setShowCinematic] = useState(false);
   const [gameState, setGameState] = useState({
     nrl: 0,
     health: 100,
     ammo: 12,
     maxAmmo: 30,
     reserveAmmo: 48,
-    battery: 100,
-    flashlightOn: true,
-    enemyCount: 0,
-    isMicActive: false,
-    fearLevel: 0,
-    isOtherworld: false,
-    objective: 'Explore the facility',
-    isInvulnerable: true
+    hasWeapon: false,
+    showWeaponInfo: false,
+    objective: ''
   });
   
   useEffect(() => {
@@ -25,18 +23,36 @@ export default function App() {
       }
     };
     
+    const handleStartCinematic = () => {
+      setShowCinematic(true);
+    };
+    
     window.addEventListener('gameStateUpdate', handleUpdate);
+    window.addEventListener('startCinematic', handleStartCinematic);
     
     return () => {
       window.removeEventListener('gameStateUpdate', handleUpdate);
+      window.removeEventListener('startCinematic', handleStartCinematic);
     };
   }, []);
   
+  const handleCinematicComplete = () => {
+    setShowCinematic(false);
+    setGameStarted(true);
+  };
+  
   return (
     <>
-      <HUD gameState={gameState} />
-      <div className="crt-overlay"></div>
-      <div className="vignette"></div>
+      {showCinematic && (
+        <CinematicOpening onComplete={handleCinematicComplete} />
+      )}
+      
+      {gameStarted && (
+        <HUD gameState={gameState} />
+      )}
+      
+      {/* Film grain overlay */}
+      <div id="film-grain"></div>
     </>
   );
 }
