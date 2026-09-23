@@ -173,6 +173,10 @@ export class Game {
     this.emergencyLights = [];
     this.flickeringLights = [];
     
+    // PS1 shaders (accessible by EnvironmentBuilder)
+    this.ps1VertexShader = ps1VertexShader;
+    this.ps1FragmentShader = ps1FragmentShader;
+    
     // PS1 shader uniforms
     this.ps1Uniforms = {
       u_snapResolution: { value: 150.0 },
@@ -195,7 +199,13 @@ export class Game {
   }
   
   init() {
+    console.log('[Game] Initializing...');
     const canvas = document.getElementById('game-canvas');
+    
+    if (!canvas) {
+      console.error('[Game] Canvas not found!');
+      return;
+    }
     
     // Renderer with horror-optimized settings
     this.renderer = new THREE.WebGLRenderer({
@@ -203,6 +213,7 @@ export class Game {
       antialias: false,
       powerPreference: 'high-performance'
     });
+    console.log('[Game] Renderer created');
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.shadowMap.enabled = true;
@@ -231,19 +242,36 @@ export class Game {
     
     // Lighting setup
     this.setupLighting();
+    console.log('[Game] Lighting setup complete');
     
     // Build environment - Laboratory facility
-    this.environmentBuilder = new EnvironmentBuilder(this);
-    this.environmentBuilder.buildLaboratory();
+    try {
+      this.environmentBuilder = new EnvironmentBuilder(this);
+      this.environmentBuilder.buildLaboratory();
+      console.log('[Game] Environment built successfully');
+    } catch (error) {
+      console.error('[Game] Failed to build environment:', error);
+    }
     
     // Initialize systems
-    this.player = new CinematicCamera(this.camera, this.scene, this);
-    this.sanitySystem = new SanitySystem(this);
-    this.audioSystem = new AdvancedAudio(this);
-    this.narrativeEngine = new NarrativeEngine(this);
-    this.enemyAI = new EnemyAI(this);
-    this.inventorySystem = new InventorySystem(this);
-    this.hallucinationSystem = new HallucinationSystem(this);
+    try {
+      this.player = new CinematicCamera(this.camera, this.scene, this);
+      console.log('[Game] Player initialized');
+      this.sanitySystem = new SanitySystem(this);
+      console.log('[Game] Sanity system initialized');
+      this.audioSystem = new AdvancedAudio(this);
+      console.log('[Game] Audio system initialized');
+      this.narrativeEngine = new NarrativeEngine(this);
+      console.log('[Game] Narrative engine initialized');
+      this.enemyAI = new EnemyAI(this);
+      console.log('[Game] Enemy AI initialized');
+      this.inventorySystem = new InventorySystem(this);
+      console.log('[Game] Inventory system initialized');
+      this.hallucinationSystem = new HallucinationSystem(this);
+      console.log('[Game] Hallucination system initialized');
+    } catch (error) {
+      console.error('[Game] Failed to initialize systems:', error);
+    }
     
     // Spawn initial enemies - delayed to prevent immediate combat
     setTimeout(() => {
@@ -285,6 +313,8 @@ export class Game {
         window.gameState.isInvulnerable = false;
       }
     }, this.INVULNERABILITY_TIME * 1000);
+    
+    console.log('[Game] Initialization complete');
   }
   
   setupLighting() {
@@ -573,14 +603,18 @@ export class Game {
     const delta = this.clock.getDelta();
     
     // Update systems
-    this.player.update(delta);
-    this.sanitySystem.update(delta);
-    this.narrativeEngine.update(delta);
-    this.audioSystem.update(delta);
-    this.enemyAI.update(delta);
-    this.hallucinationSystem.update(delta);
-    this.updateLighting(delta);
-    this.updateOtherworld(delta);
+    try {
+      if (this.player) this.player.update(delta);
+      if (this.sanitySystem) this.sanitySystem.update(delta);
+      if (this.narrativeEngine) this.narrativeEngine.update(delta);
+      if (this.audioSystem) this.audioSystem.update(delta);
+      if (this.enemyAI) this.enemyAI.update(delta);
+      if (this.hallucinationSystem) this.hallucinationSystem.update(delta);
+      this.updateLighting(delta);
+      this.updateOtherworld(delta);
+    } catch (error) {
+      console.error('[Game] Error in update loop:', error);
+    }
     
     // Update PS1 shader effects
     const sanityEffects = this.sanitySystem.getEffects();
@@ -612,7 +646,11 @@ export class Game {
     }
     
     // Render
-    this.renderer.render(this.scene, this.camera);
+    try {
+      this.renderer.render(this.scene, this.camera);
+    } catch (error) {
+      console.error('[Game] Render error:', error);
+    }
   }
   
   onResize() {

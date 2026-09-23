@@ -43,7 +43,6 @@ export class EnvironmentBuilder {
     this.wallTexture = this.createLabWallTexture();
     this.floorTexture = this.createLabFloorTexture();
     this.ceilingTexture = this.createLabCeilingTexture();
-    this.metalTexture = this.createMetalTexture();
   }
   
   createLabWallTexture() {
