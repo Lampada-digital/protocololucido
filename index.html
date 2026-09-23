@@ -3,50 +3,92 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>THE LUCID PROTOCOL</title>
-  <meta name="description" content="Somnus Dynamics - Protocol 12 - Interval 01: Disconnection" />
+  <title>PROTOCOLO LÚCIDO — THE MEMORY IS LYING</title>
+  <meta name="description" content="First-person psychological survival horror" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
   <style>
-    html, body { margin: 0; padding: 0; width: 100%; min-height: 100vh; background: #000; overflow: hidden; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
   </style>
 </head>
 <body>
   <div id="game-container">
     <canvas id="game-canvas"></canvas>
     
-    <!-- Minimalist Crosshair -->
-    <div id="crosshair"></div>
+    <!-- Minimal HUD -->
+    <div id="hud">
+      <div id="crosshair"></div>
+      <div id="health-bar"></div>
+      <div id="ammo-display"></div>
+      <div id="nrl-display"></div>
+      <div id="interaction-prompt"></div>
+    </div>
     
-    <!-- Film grain -->
+    <!-- Film grain overlay -->
     <div id="film-grain"></div>
     
-    <!-- Start Screen (Somnus Terminal) -->
-    <div id="start-screen">
-      <div class="terminal-content">
-        <div class="terminal-header">
-          <div class="somnus-logo">◈ SOMNUS DYNAMICS</div>
-          <div class="terminal-id">NEURAL INTERFACE DIVISION // TERMINAL 034</div>
+    <!-- Vignette -->
+    <div id="vignette"></div>
+    
+    <!-- Main Menu -->
+    <div id="main-menu">
+      <div class="menu-content">
+        <div class="somnus-header">
+          <div class="somnus-logo">◈</div>
+          <div class="somnus-text">SOMNUS DYNAMICS</div>
+          <div class="somnus-sub">NEURAL INTERFACE DIVISION</div>
         </div>
         
-        <div class="terminal-body">
-          <div class="terminal-line">> LUCID SYSTEM v4.7.2</div>
-          <div class="terminal-line">> PROTOCOL 12 ACTIVE</div>
-          <div class="terminal-line">> SUBJECT: DANIEL VALE // 034</div>
-          <div class="terminal-line">> INTERVAL: 01 — DISCONNECTION</div>
-          <div class="terminal-line warning">> WARNING: COGNITIVE INSTABILITY DETECTED</div>
-          <div class="terminal-line">> NRL: <span id="nrl-display">12%</span></div>
-          <div class="terminal-line">> STATUS: <span class="status-active">RECONSTRUCTING MEMORY</span></div>
+        <div class="menu-divider"></div>
+        
+        <h1 class="game-title">PROTOCOLO LÚCIDO</h1>
+        <p class="game-subtitle">THE MEMORY IS LYING</p>
+        
+        <div class="menu-info">
+          <div class="info-line">LUCID SYSTEM v4.7.2</div>
+          <div class="info-line">PROTOCOL 12 — ACTIVE</div>
+          <div class="info-line warning">SUBJECT 034: DANIEL VALE</div>
+          <div class="info-line">MEMORY INTEGRITY: <span id="memory-integrity">12%</span></div>
         </div>
         
-        <div class="terminal-footer">
-          <button id="start-button">INITIATE SESSION</button>
-          <div class="terminal-note">Press any key to continue</div>
+        <div class="menu-options">
+          <button id="btn-new-session" class="menu-btn">NEW SESSION</button>
+          <button id="btn-continue" class="menu-btn disabled">CONTINUE</button>
+          <button id="btn-memory-archive" class="menu-btn">MEMORY ARCHIVE</button>
+          <button id="btn-settings" class="menu-btn">SETTINGS</button>
+        </div>
+        
+        <div class="menu-footer">
+          <div class="system-message" id="system-message">SYSTEM MESSAGE: "HE IS AWAKE."</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Death Screen -->
+    <div id="death-screen" style="display:none;">
+      <div class="death-content">
+        <div class="death-icon">◈</div>
+        <div class="death-title">LUCID SYSTEM</div>
+        <div class="death-subtitle">MEMORY RESTORATION</div>
+        <div class="death-attempt">Attempt: <span id="death-attempt">02</span></div>
+        <button id="btn-restart" class="death-btn">REINITIALIZE</button>
+      </div>
+    </div>
+    
+    <!-- Loading Screen -->
+    <div id="loading-screen" style="display:none;">
+      <div class="loading-content">
+        <div class="loading-icon">◈</div>
+        <div class="loading-text">SYNCHRONIZING MEMORY...</div>
+        <div class="loading-bar">
+          <div class="loading-progress" id="loading-progress"></div>
         </div>
       </div>
     </div>
   </div>
+  
   <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>
