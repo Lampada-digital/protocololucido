@@ -225,6 +225,11 @@ class Enemy {
       this.alertTimer = 0;
     }
     
+    // Trigger narrative event on first enemy sighted
+    if (this.game.narrativeEngine && !this.game.narrativeEngine.eventTriggers.get('first_enemy_sighted').triggered) {
+      this.game.narrativeEngine.triggerEvent('first_enemy_sighted');
+    }
+    
     // Play chase audio
     if (this.game.audioSystem && Math.random() < 0.01) {
       this.game.audioSystem.playEnemyGroan();
